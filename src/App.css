@@ -41,23 +41,35 @@
   text-transform: none;
 }
 
-/* NOWE: Przycisk Eksportu w nagłówku (jeśli zostawiłeś go w Home.jsx) */
-.btn-export {
-    margin-top: 15px;
-    background-color: rgba(255, 255, 255, 0.15);
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    padding: 8px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.9em;
-    transition: all 0.3s;
+/* NOWE: Panel Raportu w Home */
+.report-panel {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
 }
 
-.btn-export:hover {
-    background-color: rgba(255, 255, 255, 0.3);
-    border-color: white;
+.btn-main-download {
+  background-color: #f1c40f;
+  color: #2c3e50;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: transform 0.2s;
 }
+.btn-main-download:hover { background-color: #f39c12; transform: translateY(-2px); }
+
+.btn-clear {
+  background-color: rgba(231, 76, 60, 0.2);
+  color: #e74c3c;
+  border: 1px solid #e74c3c;
+  padding: 10px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.btn-clear:hover { background-color: #e74c3c; color: white; }
 
 /* PASEK WYSZUKIWANIA */
 .search-bar-container {
@@ -146,6 +158,7 @@ table tbody tr:hover { background-color: #e0f2f1; }
     gap: 10px;
     justify-content: center;
     flex-wrap: wrap;
+    align-items: center;
 }
 
 .btn-search {
@@ -165,9 +178,9 @@ table tbody tr:hover { background-color: #e0f2f1; }
 .btn-search:hover { background-color: #219150; transform: translateY(-2px); }
 .btn-search:disabled { background-color: #bdc3c7; cursor: not-allowed; transform: none; }
 
-/* NOWE: Przycisk Pobierania w Details */
-.btn-download {
-  background-color: #8e44ad; /* Fioletowy dla odróżnienia */
+/* NOWE: Przycisk "Dodaj do raportu" w Details */
+.btn-add-report {
+  background-color: #e67e22; /* Pomarańczowy */
   color: white;
   border: none;
   padding: 10px 20px;
@@ -177,11 +190,21 @@ table tbody tr:hover { background-color: #e0f2f1; }
   font-size: 14px;
   transition: transform 0.2s;
 }
+.btn-add-report:hover { background-color: #d35400; transform: translateY(-2px); }
 
-.btn-download:hover {
-  background-color: #732d91;
-  transform: translateY(-2px);
+/* Przycisk Pobierania w Details */
+.btn-download {
+  background-color: #8e44ad;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: transform 0.2s;
 }
+.btn-download:hover { background-color: #732d91; transform: translateY(-2px); }
 
 a { color: #2980b9; text-decoration: none; }
 a:hover { text-decoration: underline; }

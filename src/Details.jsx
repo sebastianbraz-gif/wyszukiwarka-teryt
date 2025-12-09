@@ -110,27 +110,53 @@ function Details() {
     }
   };
 
-  // NOWE: Funkcja pobierania pojedynczego pliku
+  // Funkcja pobierania pojedynczego pliku (lokalnie)
   const handleDownloadSingle = () => {
       if (!location || !coords) return;
-
-      // Tworzymy treść pliku CSV
-      // \uFEFF to znacznik BOM, dzięki któremu Excel poprawnie czyta polskie znaki
       const headers = "Województwo;Miejscowość;Ulica;Numer;Kod Pocztowy;Współrzędne\n";
       const row = `${location.wojewodztwo};${location.miejscowosc};${location.ulica};${point === 'center' ? 'Środek' : point};${postalCode || 'Brak'};${coords}`;
-      
       const csvContent = "\uFEFF" + headers + row;
-
-      // Tworzenie pliku w przeglądarce
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      // Nazwa pliku np: raport_Marszalkowska_Warszawa.csv
-      link.setAttribute('download', `dane_${location.ulica.replace(/\s/g, '_')}_${location.miejscowosc}.csv`);
+      link.setAttribute('download', `dane_${location.ulica}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+  };
+
+  // NOWE: Funkcja dodawania do zbiorczego raportu (LocalStorage)
+  const handleAddToReport = () => {
+    if (!location || !coords) return;
+
+    // 1. Tworzymy obiekt danych
+    const newItem = {
+      id: `${id}-${point}`, // Unikalne ID
+      wojewodztwo: location.wojewodztwo,
+      miejscowosc: location.miejscowosc,
+      ulica: location.ulica,
+      numer: point === 'center' ? 'Środek' : point,
+      kod: postalCode || 'Brak',
+      wspolrzedne: coords,
+      data_dodania: new Date().toLocaleString()
+    };
+
+    // 2. Pobieramy obecną listę z pamięci przeglądarki
+    const existingReport = JSON.parse(localStorage.getItem('my_report') || '[]');
+
+    // 3. Sprawdzamy czy już tego nie dodaliśmy
+    const exists = existingReport.find(item => item.id === newItem.id);
+    if (exists) {
+      alert("To miejsce jest już w Twoim raporcie!");
+      return;
+    }
+
+    // 4. Dodajemy i zapisujemy
+    const newReport = [...existingReport, newItem];
+    localStorage.setItem('my_report', JSON.stringify(newReport));
+    
+    alert(`Dodano do raportu! Masz już ${newReport.length} pozycji.`);
   };
 
   if (loading) return <div className="App"><p style={{marginTop:'50px'}}>Ładowanie...</p></div>;
@@ -154,9 +180,7 @@ function Details() {
            🠔 Wróć do wyboru
         </Link>
 
-        {/* --- SEKCJA WYNIKÓW --- */}
         <div style={{ margin: '30px 0', textAlign: 'center' }}>
-          
           {postalCode && (
               <div className="postal-badge-container">
                   <span className="postal-label">Kod Pocztowy:</span>
@@ -165,7 +189,7 @@ function Details() {
           )}
 
           <strong style={{ display: 'block', marginBottom: '10px', color: '#555', marginTop: '20px' }}>
-            Współrzędne GPS {point !== 'center' && `(numer ${point})`}:
+            Współrzędne GPS:
           </strong>
           
           {coords ? (
@@ -181,19 +205,25 @@ function Details() {
         <div className="action-buttons">
             {coords ? (
             <>
-                {/* Przycisk Google Maps */}
                 <a 
                     href={`https://www.google.com/maps/search/?api=1&query=${coords}`} 
                     target="_blank" rel="noreferrer"
-                    className="btn-search" style={{ backgroundColor: '#2980b9', marginRight: '10px' }}>
-                    Pokaż na mapie 🗺️
+                    className="btn-search" style={{ backgroundColor: '#2980b9' }}>
+                    Mapa 🗺️
                 </a>
 
-                {/* NOWE: Przycisk Pobierania */}
+                {/* NOWE: Dodaj do raportu */}
+                <button 
+                    onClick={handleAddToReport}
+                    className="btn-add-report">
+                    + Dodaj do raportu
+                </button>
+
+                {/* Pobieranie pojedyncze */}
                 <button 
                     onClick={handleDownloadSingle}
                     className="btn-download">
-                    Pobierz dane 📥
+                    Pobierz ten plik 📥
                 </button>
             </>
             ) : (

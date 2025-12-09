@@ -6,14 +6,14 @@ import './App.css';
 function Home() {
   const [locations, setLocations] = useState([]);
   
-  // Stany dla dwóch pól wyszukiwania
-  const [searchCity, setSearchCity] = useState('');   // Miejscowość
-  const [searchTerm, setSearchTerm] = useState('');   // Ulica
+  // Stany dla wyszukiwania
+  const [searchCity, setSearchCity] = useState('');   
+  const [searchTerm, setSearchTerm] = useState('');   
   
   const [sortBy, setSortBy] = useState('miejscowosc');
   const [loading, setLoading] = useState(false);
 
-  // Funkcja pobierająca dane
+  // Funkcja pobierająca dane (Wyszukiwarka)
   const fetchLocations = async (city, street, sortMethod) => {
     setLoading(true);
     try {
@@ -21,36 +21,23 @@ function Home() {
         .from('lokalizacje')
         .select('id, wojewodztwo, miejscowosc, ulica');
 
-      // Filtr Miejscowości
-      if (city.length > 0) {
-        query = query.ilike('miejscowosc', `%${city}%`);
-      }
+      if (city.length > 0) query = query.ilike('miejscowosc', `%${city}%`);
+      if (street.length > 0) query = query.ilike('ulica', `%${street}%`);
 
-      // Filtr Ulicy
-      if (street.length > 0) {
-        query = query.ilike('ulica', `%${street}%`);
-      }
-
-      // Sortowanie
       if (sortMethod === 'wojewodztwo') {
-        query = query.order('wojewodztwo', { ascending: true })
-                     .order('miejscowosc', { ascending: true });
+        query = query.order('wojewodztwo', { ascending: true }).order('miejscowosc', { ascending: true });
       } else if (sortMethod === 'miejscowosc') {
-        query = query.order('miejscowosc', { ascending: true })
-                     .order('ulica', { ascending: true });
+        query = query.order('miejscowosc', { ascending: true }).order('ulica', { ascending: true });
       } else {
         query = query.order('ulica', { ascending: true });
       }
 
       query = query.limit(50);
-
       const { data, error } = await query;
       
-      if (error) {
-        console.error("Błąd pobierania:", error);
-      } else {
-        setLocations(data || []);
-      }
+      if (error) console.error("Błąd pobierania:", error);
+      else setLocations(data || []);
+      
     } catch (err) {
       console.error("Błąd krytyczny:", err);
     } finally {
@@ -58,12 +45,48 @@ function Home() {
     }
   };
 
-  // Live Search (reaguje na zmiany w polach)
+  // NOWE: Funkcja pobierania ZBIORCZEGO raportu z LocalStorage
+  const handleDownloadReport = () => {
+    // 1. Pobierz dane z pamięci
+    const savedData = JSON.parse(localStorage.getItem('my_report') || '[]');
+
+    if (savedData.length === 0) {
+      alert("Twój raport jest pusty! Dodaj najpierw jakieś punkty.");
+      return;
+    }
+
+    // 2. Generuj CSV
+    const headers = "Województwo;Miejscowość;Ulica;Numer;Kod Pocztowy;Współrzędne;Data Dodania\n";
+    
+    const rows = savedData.map(item => 
+      `${item.wojewodztwo};${item.miejscowosc};${item.ulica};${item.numer};${item.kod};${item.wspolrzedne};${item.data_dodania}`
+    ).join("\n");
+
+    const csvContent = "\uFEFF" + headers + rows;
+
+    // 3. Pobierz plik
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `PELNY_RAPORT_${new Date().toLocaleDateString()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // NOWE: Funkcja czyszczenia raportu
+  const handleClearReport = () => {
+    if (window.confirm("Czy na pewno chcesz usunąć wszystkie zapisane punkty z raportu?")) {
+      localStorage.removeItem('my_report');
+      alert("Raport wyczyszczony.");
+    }
+  };
+
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       fetchLocations(searchCity, searchTerm, sortBy);
-    }, 500); // 0.5 sekundy opóźnienia
-
+    }, 500);
     return () => clearTimeout(delayDebounceFn);
   }, [searchCity, searchTerm, sortBy]);
 
@@ -71,12 +94,20 @@ function Home() {
     <div className="App">
       <header className="app-header">
         <h1>Wyszukiwarka Ulic TERYT</h1>
+        
+        {/* NOWE: Sekcja Raportu w nagłówku */}
+        <div className="report-panel">
+           <button onClick={handleDownloadReport} className="btn-main-download">
+             📂 Pobierz Zapisany Raport
+           </button>
+           <button onClick={handleClearReport} className="btn-clear">
+             🗑️ Wyczyść
+           </button>
+        </div>
       </header>
 
       {/* Pasek Wyszukiwania */}
       <div className="search-bar-container">
-        
-        {/* Pole 1: Miasto */}
         <input 
           type="text" 
           placeholder="Miejscowość..." 
@@ -84,8 +115,6 @@ function Home() {
           onChange={(e) => setSearchCity(e.target.value)}
           className="live-search-input city-input"
         />
-
-        {/* Pole 2: Ulica */}
         <input 
           type="text" 
           placeholder="Nazwa ulicy..." 
@@ -93,8 +122,6 @@ function Home() {
           onChange={(e) => setSearchTerm(e.target.value)}
           className="live-search-input street-input"
         />
-
-        {/* Pole 3: Sortowanie */}
         <select 
           className="sort-select" 
           value={sortBy} 
@@ -104,7 +131,6 @@ function Home() {
           <option value="wojewodztwo">Sort: Województwo</option>
           <option value="ulica">Sort: Ulica</option>
         </select>
-
       </div>
 
       <div className="table-container">
