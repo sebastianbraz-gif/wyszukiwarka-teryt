@@ -13,13 +13,11 @@ function Home() {
   const [sortBy, setSortBy] = useState('miejscowosc');
   const [loading, setLoading] = useState(false);
 
-  // Funkcja pobierająca dane (Wyszukiwarka)
+  // Funkcja pobierająca dane z bazy (Wyszukiwarka)
   const fetchLocations = async (city, street, sortMethod) => {
     setLoading(true);
     try {
-      let query = supabase
-        .from('lokalizacje')
-        .select('id, wojewodztwo, miejscowosc, ulica');
+      let query = supabase.from('lokalizacje').select('id, wojewodztwo, miejscowosc, ulica');
 
       if (city.length > 0) query = query.ilike('miejscowosc', `%${city}%`);
       if (street.length > 0) query = query.ilike('ulica', `%${street}%`);
@@ -45,9 +43,9 @@ function Home() {
     }
   };
 
-  // NOWE: Funkcja pobierania ZBIORCZEGO raportu z LocalStorage
+  // NOWE: Funkcja pobierania ZBIORCZEGO raportu z LocalStorage (z linkiem do mapy)
   const handleDownloadReport = () => {
-    // 1. Pobierz dane z pamięci
+    // 1. Pobierz dane z pamięci przeglądarki
     const savedData = JSON.parse(localStorage.getItem('my_report') || '[]');
 
     if (savedData.length === 0) {
@@ -55,11 +53,12 @@ function Home() {
       return;
     }
 
-    // 2. Generuj CSV
-    const headers = "Województwo;Miejscowość;Ulica;Numer;Kod Pocztowy;Współrzędne;Data Dodania\n";
+    // 2. Generuj CSV z nagłówkami
+    const headers = "Województwo;Miejscowość;Ulica;Numer;Kod Pocztowy;Wysokość;Współrzędne;Link do Mapy;Data Dodania\n";
     
+    // Mapujemy dane do wierszy CSV
     const rows = savedData.map(item => 
-      `${item.wojewodztwo};${item.miejscowosc};${item.ulica};${item.numer};${item.kod};${item.wspolrzedne};${item.data_dodania}`
+      `${item.wojewodztwo};${item.miejscowosc};${item.ulica};${item.numer};${item.kod};${item.wysokosc || 'Brak'};${item.wspolrzedne};${item.link_mapy || ''};${item.data_dodania}`
     ).join("\n");
 
     const csvContent = "\uFEFF" + headers + rows;
@@ -75,7 +74,7 @@ function Home() {
     document.body.removeChild(link);
   };
 
-  // NOWE: Funkcja czyszczenia raportu
+  // Funkcja czyszczenia raportu
   const handleClearReport = () => {
     if (window.confirm("Czy na pewno chcesz usunąć wszystkie zapisane punkty z raportu?")) {
       localStorage.removeItem('my_report');
@@ -83,6 +82,7 @@ function Home() {
     }
   };
 
+  // Live Search
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       fetchLocations(searchCity, searchTerm, sortBy);
@@ -95,7 +95,7 @@ function Home() {
       <header className="app-header">
         <h1>Wyszukiwarka Ulic TERYT</h1>
         
-        {/* NOWE: Sekcja Raportu w nagłówku */}
+        {/* Panel Raportu w nagłówku */}
         <div className="report-panel">
            <button onClick={handleDownloadReport} className="btn-main-download">
              📂 Pobierz Zapisany Raport

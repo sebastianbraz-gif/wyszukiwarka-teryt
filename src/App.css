@@ -41,35 +41,40 @@
   text-transform: none;
 }
 
-/* NOWE: Panel Raportu w Home */
+/* PANEL RAPORTU (Nowość) */
 .report-panel {
   margin-top: 20px;
   display: flex;
   gap: 10px;
 }
-
 .btn-main-download {
-  background-color: #f1c40f;
-  color: #2c3e50;
-  border: none;
+  background-color: #f1c40f; 
+  color: #2c3e50; 
+  border: none; 
   padding: 10px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: bold;
+  border-radius: 6px; 
+  cursor: pointer; 
+  font-weight: bold; 
   transition: transform 0.2s;
 }
-.btn-main-download:hover { background-color: #f39c12; transform: translateY(-2px); }
+.btn-main-download:hover { 
+  background-color: #f39c12; 
+  transform: translateY(-2px); 
+}
 
 .btn-clear {
-  background-color: rgba(231, 76, 60, 0.2);
-  color: #e74c3c;
+  background-color: rgba(231, 76, 60, 0.2); 
+  color: #e74c3c; 
   border: 1px solid #e74c3c;
-  padding: 10px 15px;
-  border-radius: 6px;
-  cursor: pointer;
+  padding: 10px 15px; 
+  border-radius: 6px; 
+  cursor: pointer; 
   font-weight: bold;
 }
-.btn-clear:hover { background-color: #e74c3c; color: white; }
+.btn-clear:hover { 
+  background-color: #e74c3c; 
+  color: white; 
+}
 
 /* PASEK WYSZUKIWANIA */
 .search-bar-container {
@@ -178,66 +183,91 @@ table tbody tr:hover { background-color: #e0f2f1; }
 .btn-search:hover { background-color: #219150; transform: translateY(-2px); }
 .btn-search:disabled { background-color: #bdc3c7; cursor: not-allowed; transform: none; }
 
-/* NOWE: Przycisk "Dodaj do raportu" w Details */
 .btn-add-report {
-  background-color: #e67e22; /* Pomarańczowy */
-  color: white;
-  border: none;
+  background-color: #e67e22; 
+  color: white; 
+  border: none; 
   padding: 10px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 14px;
+  border-radius: 6px; 
+  cursor: pointer; 
+  font-weight: 600; 
+  font-size: 14px; 
   transition: transform 0.2s;
 }
-.btn-add-report:hover { background-color: #d35400; transform: translateY(-2px); }
+.btn-add-report:hover { 
+  background-color: #d35400; 
+  transform: translateY(-2px); 
+}
 
-/* Przycisk Pobierania w Details */
 .btn-download {
-  background-color: #8e44ad;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 14px;
+  background-color: #8e44ad; 
+  color: white; 
+  border: none; 
+  padding: 10px 20px; 
+  border-radius: 6px; 
+  cursor: pointer; 
+  font-weight: 600; 
+  font-size: 14px; 
   transition: transform 0.2s;
 }
-.btn-download:hover { background-color: #732d91; transform: translateY(-2px); }
+.btn-download:hover { 
+  background-color: #732d91; 
+  transform: translateY(-2px); 
+}
 
 a { color: #2980b9; text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* --- Styl dla Kodu Pocztowego w Details.jsx --- */
-.postal-badge-container {
-  display: inline-flex;
-  align-items: center;
-  background-color: #fff8e1; /* Jasny żółty */
-  border: 1px solid #ffecb3;
+/* PLAKIETKI (Badges) */
+.info-badge {
+  display: inline-flex; 
+  align-items: center; 
   padding: 10px 20px;
-  border-radius: 50px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-  margin-bottom: 10px;
+  border-radius: 50px; 
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05); 
+  margin-bottom: 10px; 
   animation: fadeIn 0.5s;
 }
 
-.postal-label {
-  font-size: 0.9em;
-  color: #f39c12;
-  font-weight: bold;
-  margin-right: 10px;
-  text-transform: uppercase;
+/* Styl dla Kodu Pocztowego (Żółty) */
+.postal-badge { 
+  background-color: #fff8e1; 
+  border: 1px solid #ffecb3; 
+}
+.postal-badge .badge-label { 
+  font-size: 0.8em; 
+  color: #f39c12; 
+  font-weight: bold; 
+  margin-right: 10px; 
+  text-transform: uppercase; 
+}
+.postal-badge .badge-value { 
+  font-size: 1.1em; 
+  color: #d35400; 
+  font-weight: 800; 
+  letter-spacing: 1px; 
 }
 
-.postal-value {
-  font-size: 1.2em;
-  color: #d35400;
-  font-weight: 800;
-  letter-spacing: 1px;
+/* Styl dla Wysokości (Niebieski) */
+.elevation-badge { 
+  background-color: #e3f2fd; 
+  border: 1px solid #bbdefb; 
+}
+.elevation-badge .badge-label { 
+  font-size: 0.8em; 
+  color: #1976d2; 
+  font-weight: bold; 
+  margin-right: 10px; 
+  text-transform: uppercase; 
+}
+.elevation-badge .badge-value { 
+  font-size: 1.1em; 
+  color: #0d47a1; 
+  font-weight: 800; 
+  letter-spacing: 1px; 
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }

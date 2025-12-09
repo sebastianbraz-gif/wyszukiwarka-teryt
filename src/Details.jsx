@@ -11,13 +11,14 @@ function Details() {
   // Dane dynamiczne
   const [coords, setCoords] = useState(null);
   const [postalCode, setPostalCode] = useState(null);
+  const [elevation, setElevation] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
+  // 1. Pobieranie danych z bazy przy wejściu
   useEffect(() => {
     async function getData() {
-      // 1. Pobierz dane ulicy
       const { data: streetData, error } = await supabase
         .from('lokalizacje')
         .select('*')
@@ -31,18 +32,10 @@ function Details() {
       }
       setLocation(streetData);
 
-      // 2. SPRAWDZANIE PAMIĘCI (CACHE)
       if (point === 'center') {
-        // Środek ulicy
-        if (streetData.geom) {
-          setCoords(streetData.geom);
-        }
-        if (streetData.kod_pocztowy) {
-           setPostalCode(streetData.kod_pocztowy);
-        }
-
+        if (streetData.geom) setCoords(streetData.geom);
+        if (streetData.kod_pocztowy) setPostalCode(streetData.kod_pocztowy);
       } else {
-        // Konkretny numer
         const { data: addressData } = await supabase
           .from('adresy')
           .select('geom, kod_pocztowy')
@@ -60,6 +53,27 @@ function Details() {
     getData();
   }, [id, point]);
 
+  // 2. Efekt do pobierania Wysokości n.p.m.
+  useEffect(() => {
+    async function fetchElevation() {
+        if (!coords) return;
+        try {
+            const [lat, lon] = coords.split(',').map(s => s.trim());
+            const url = `https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`;
+            const res = await fetch(url);
+            const data = await res.json();
+
+            if (data && data.elevation) {
+                setElevation(data.elevation[0].toFixed(1));
+            }
+        } catch (err) {
+            console.error("Błąd pobierania wysokości:", err);
+        }
+    }
+    fetchElevation();
+  }, [coords]);
+
+  // 3. Geokodowanie
   const handleGeocode = async () => {
     if (!location) return;
     setProcessing(true);
@@ -75,7 +89,6 @@ function Details() {
     
     try {
       const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}`;
-      
       const res = await fetch(url);
       const data = await res.json();
 
@@ -83,22 +96,18 @@ function Details() {
         const resultCoords = `${data[0].lat}, ${data[0].lon}`;
         const resultPostCode = data[0].address?.postcode || null;
         
-        // --- ZAPIS DO BAZY ---
         if (point === 'center') {
           const updateData = { geom: resultCoords, status: 'zgeokodowane', jakosc: 100 };
           if (resultPostCode) updateData.kod_pocztowy = resultPostCode;
-
           await supabase.from('lokalizacje').update(updateData).eq('id', id);
         } else {
           const upsertData = { lokalizacja_id: id, numer_domu: point, geom: resultCoords };
           if (resultPostCode) upsertData.kod_pocztowy = resultPostCode;
-
           await supabase.from('adresy').upsert(upsertData, { onConflict: 'lokalizacja_id, numer_domu' });
         }
 
         setCoords(resultCoords);
         if (resultPostCode) setPostalCode(resultPostCode);
-
       } else {
         alert("Nie znaleziono współrzędnych.");
       }
@@ -110,11 +119,15 @@ function Details() {
     }
   };
 
-  // Funkcja pobierania pojedynczego pliku (lokalnie)
+  // 4. Pobieranie pojedynczego pliku CSV (Z LINKIEM)
   const handleDownloadSingle = () => {
       if (!location || !coords) return;
-      const headers = "Województwo;Miejscowość;Ulica;Numer;Kod Pocztowy;Współrzędne\n";
-      const row = `${location.wojewodztwo};${location.miejscowosc};${location.ulica};${point === 'center' ? 'Środek' : point};${postalCode || 'Brak'};${coords}`;
+      
+      const googleLink = `https://www.google.com/maps?q=${coords.replace(' ', '')}`;
+
+      const headers = "Województwo;Miejscowość;Ulica;Numer;Kod Pocztowy;Wysokość n.p.m.;Współrzędne;Link do Mapy\n";
+      const row = `${location.wojewodztwo};${location.miejscowosc};${location.ulica};${point === 'center' ? 'Środek' : point};${postalCode || 'Brak'};${elevation ? elevation + ' m' : 'Brak'};${coords};${googleLink}`;
+      
       const csvContent = "\uFEFF" + headers + row;
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
@@ -126,36 +139,36 @@ function Details() {
       document.body.removeChild(link);
   };
 
-  // NOWE: Funkcja dodawania do zbiorczego raportu (LocalStorage)
+  // 5. Dodawanie do raportu (LocalStorage) (Z LINKIEM)
   const handleAddToReport = () => {
     if (!location || !coords) return;
 
-    // 1. Tworzymy obiekt danych
+    // Generujemy link do Google Maps
+    const googleLink = `https://www.google.com/maps?q=${coords.replace(' ', '')}`;
+
     const newItem = {
-      id: `${id}-${point}`, // Unikalne ID
+      id: `${id}-${point}`,
       wojewodztwo: location.wojewodztwo,
       miejscowosc: location.miejscowosc,
       ulica: location.ulica,
       numer: point === 'center' ? 'Środek' : point,
       kod: postalCode || 'Brak',
+      wysokosc: elevation ? `${elevation} m` : 'Brak',
       wspolrzedne: coords,
+      link_mapy: googleLink, // NOWE POLA
       data_dodania: new Date().toLocaleString()
     };
 
-    // 2. Pobieramy obecną listę z pamięci przeglądarki
     const existingReport = JSON.parse(localStorage.getItem('my_report') || '[]');
-
-    // 3. Sprawdzamy czy już tego nie dodaliśmy
     const exists = existingReport.find(item => item.id === newItem.id);
+    
     if (exists) {
       alert("To miejsce jest już w Twoim raporcie!");
       return;
     }
 
-    // 4. Dodajemy i zapisujemy
     const newReport = [...existingReport, newItem];
     localStorage.setItem('my_report', JSON.stringify(newReport));
-    
     alert(`Dodano do raportu! Masz już ${newReport.length} pozycji.`);
   };
 
@@ -181,12 +194,21 @@ function Details() {
         </Link>
 
         <div style={{ margin: '30px 0', textAlign: 'center' }}>
-          {postalCode && (
-              <div className="postal-badge-container">
-                  <span className="postal-label">Kod Pocztowy:</span>
-                  <span className="postal-value">{postalCode}</span>
-              </div>
-          )}
+          
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap' }}>
+              {postalCode && (
+                  <div className="info-badge postal-badge">
+                      <span className="badge-label">Kod Pocztowy</span>
+                      <span className="badge-value">{postalCode}</span>
+                  </div>
+              )}
+              {elevation && (
+                  <div className="info-badge elevation-badge">
+                      <span className="badge-label">Wysokość n.p.m.</span>
+                      <span className="badge-value">{elevation} m</span>
+                  </div>
+              )}
+          </div>
 
           <strong style={{ display: 'block', marginBottom: '10px', color: '#555', marginTop: '20px' }}>
             Współrzędne GPS:
@@ -201,25 +223,22 @@ function Details() {
           )}
         </div>
 
-        {/* --- PRZYCISKI AKCJI --- */}
         <div className="action-buttons">
             {coords ? (
             <>
                 <a 
-                    href={`https://www.google.com/maps/search/?api=1&query=${coords}`} 
+                    href={`https://www.google.com/maps?q=${coords}`} 
                     target="_blank" rel="noreferrer"
                     className="btn-search" style={{ backgroundColor: '#2980b9' }}>
                     Mapa 🗺️
                 </a>
 
-                {/* NOWE: Dodaj do raportu */}
                 <button 
                     onClick={handleAddToReport}
                     className="btn-add-report">
                     + Dodaj do raportu
                 </button>
 
-                {/* Pobieranie pojedyncze */}
                 <button 
                     onClick={handleDownloadSingle}
                     className="btn-download">
@@ -228,7 +247,7 @@ function Details() {
             </>
             ) : (
             <button className="btn-search" onClick={handleGeocode} disabled={processing}>
-                {processing ? 'Pobieranie...' : `📍 Pobierz pozycję i Kod Pocztowy`}
+                {processing ? 'Pobieranie...' : `📍 Pobierz pozycję i Dane`}
             </button>
             )}
         </div>
