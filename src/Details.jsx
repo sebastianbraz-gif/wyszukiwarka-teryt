@@ -18,17 +18,17 @@ function Details() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   
-  // Stany do edycji (Operator/Audytor)
+  // Stany do edycji
   const [userRole, setUserRole] = useState(localStorage.getItem('user_role') || 'guest');
   const [isEditing, setIsEditing] = useState(false);
   const [newPostal, setNewPostal] = useState('');
   
-  // ID rekordu do edycji
+  // ID rekordu
   const [currentRecordInfo, setCurrentRecordInfo] = useState({ table: '', id: null });
 
-  // --- NOWE STANY DO ZGŁASZANIA BŁĘDÓW ---
+  // Stany Zgłoszeń
   const [showReportModal, setShowReportModal] = useState(false);
-  const [reportType, setReportType] = useState('kod'); // 'kod' lub 'brak'
+  const [reportType, setReportType] = useState('kod');
   const [reportNote, setReportNote] = useState('');
 
   // 1. Pobieranie danych
@@ -160,10 +160,13 @@ function Details() {
       } catch (err) { alert("Błąd: " + err.message); }
   };
 
-  // 5. Pobieranie / Raport
+  // 5. Pobieranie / Raport (Z NAPRAWIONYM LINKIEM)
   const handleDownloadSingle = () => {
       if (!location || !coords) return;
-      const googleLink = `http://googleusercontent.com/maps.google.com/?q=${coords.replace(' ', '')}`;
+      
+      // POPRAWIONY LINK:
+      const googleLink = `https://www.google.com/maps?q=${coords.replace(' ', '')}`;
+
       const headers = "Województwo;Miejscowość;Ulica;Numer;Kod Pocztowy;Wysokość;Współrzędne;Link\n";
       const row = `${location.wojewodztwo};${location.miejscowosc};${location.ulica};${point === 'center' ? 'Środek' : point};${postalCode || 'Brak'};${elevation};${coords};${googleLink}`;
       const blob = new Blob(["\uFEFF" + headers + row], { type: 'text/csv;charset=utf-8;' });
@@ -172,11 +175,15 @@ function Details() {
 
   const handleAddToReport = () => {
     if (!location || !coords) return;
+    
+    // POPRAWIONY LINK:
+    const googleLink = `https://www.google.com/maps?q=${coords.replace(' ', '')}`;
+
     const newItem = {
       id: `${id}-${point}`,
       wojewodztwo: location.wojewodztwo, miejscowosc: location.miejscowosc, ulica: location.ulica, numer: point === 'center' ? 'Środek' : point,
       kod: postalCode || 'Brak', wysokosc: elevation ? `${elevation} m` : 'Brak', wspolrzedne: coords,
-      link_mapy: `http://googleusercontent.com/maps.google.com/?q=${coords.replace(' ', '')}`,
+      link_mapy: googleLink,
       data_dodania: new Date().toLocaleString()
     };
     const report = JSON.parse(localStorage.getItem('my_report') || '[]');
@@ -185,7 +192,7 @@ function Details() {
     alert("Dodano do raportu!");
   };
 
-  // --- NOWE: FUNKCJA ZGŁASZANIA Z MODALEM ---
+  // --- MODAL ZGŁOSZEŃ ---
   const openReportModal = () => {
       setReportType('kod');
       setReportNote('');
@@ -227,28 +234,34 @@ function Details() {
       {/* --- MODAL ZGŁOSZENIOWY --- */}
       {showReportModal && (
           <div className="login-modal-overlay">
-              <div className="login-modal" style={{width: '400px'}}>
+              <div className="login-modal">
                   <h2>Co się nie zgadza?</h2>
                   
-                  <div style={{margin: '20px 0'}}>
-                      <label style={{display: 'block', marginBottom: '10px', cursor: 'pointer'}}>
+                  <div className="report-options">
+                      <label 
+                        className={`report-card ${reportType === 'kod' ? 'selected' : ''}`}
+                        onClick={() => setReportType('kod')}
+                      >
                           <input 
                             type="radio" 
                             name="rtype" 
                             checked={reportType === 'kod'} 
                             onChange={() => setReportType('kod')} 
                           /> 
-                          <span style={{marginLeft: '8px', fontWeight: 'bold'}}>Błędny Kod Pocztowy</span>
+                          <span className="report-text">Błędny Kod Pocztowy</span>
                       </label>
 
-                      <label style={{display: 'block', marginBottom: '10px', cursor: 'pointer'}}>
+                      <label 
+                        className={`report-card ${reportType === 'brak' ? 'selected-danger' : ''}`}
+                        onClick={() => setReportType('brak')}
+                      >
                           <input 
                             type="radio" 
                             name="rtype" 
                             checked={reportType === 'brak'} 
                             onChange={() => setReportType('brak')} 
                           /> 
-                          <span style={{marginLeft: '8px', fontWeight: 'bold', color: '#c0392b'}}>Ten adres nie istnieje</span>
+                          <span className="report-text danger">Ten adres nie istnieje</span>
                       </label>
                   </div>
 
@@ -263,7 +276,7 @@ function Details() {
                   )}
 
                   <div className="login-buttons">
-                      <button onClick={submitReport} className="btn-confirm-login">Wyślij Zgłoszenie</button>
+                      <button onClick={submitReport} className="btn-confirm-login">Wyślij</button>
                       <button onClick={() => setShowReportModal(false)} className="btn-cancel-login">Anuluj</button>
                   </div>
               </div>
@@ -308,7 +321,8 @@ function Details() {
         <div className="action-buttons">
             {coords ? (
             <>
-                <a href={`http://googleusercontent.com/maps.google.com/?q=${coords.replace(' ', '')}`} target="_blank" rel="noreferrer" className="btn-search" style={{ backgroundColor: '#2980b9' }}>Mapa 🗺️</a>
+                {/* POPRAWIONY LINK PONIŻEJ */}
+                <a href={`https://www.google.com/maps?q=${coords.replace(' ', '')}`} target="_blank" rel="noreferrer" className="btn-search" style={{ backgroundColor: '#2980b9' }}>Mapa 🗺️</a>
                 <button onClick={handleAddToReport} className="btn-add-report">+ Dodaj do raportu</button>
                 <button onClick={handleDownloadSingle} className="btn-download">Pobierz ten plik 📥</button>
             </>
@@ -319,7 +333,6 @@ function Details() {
 
         <div style={{marginTop: '30px', padding: '15px', border: '1px dashed #e74c3c', borderRadius: '8px', backgroundColor: '#fdf2f2', width: '90%'}}>
             <p style={{color: '#c0392b', fontSize: '0.9em', margin: '0 0 10px 0'}}>Widzisz błąd w danych?</p>
-            {/* ZMIANA: Wywołanie modala zamiast prompta */}
             <button onClick={openReportModal} className="btn-report-error">📢 Zgłoś błąd tego adresu</button>
         </div>
       </div>
