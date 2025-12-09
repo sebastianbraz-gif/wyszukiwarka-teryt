@@ -10,7 +10,7 @@ function Details() {
   
   // Dane dynamiczne
   const [coords, setCoords] = useState(null);
-  const [postalCode, setPostalCode] = useState(null); // NOWE: Stan na kod pocztowy
+  const [postalCode, setPostalCode] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -35,10 +35,8 @@ function Details() {
       if (point === 'center') {
         // Środek ulicy
         if (streetData.geom) {
-          console.log("Mamy to w bazie (środek):", streetData.geom);
           setCoords(streetData.geom);
         }
-        // NOWE: Czy mamy kod pocztowy w bazie?
         if (streetData.kod_pocztowy) {
            setPostalCode(streetData.kod_pocztowy);
         }
@@ -47,7 +45,7 @@ function Details() {
         // Konkretny numer
         const { data: addressData } = await supabase
           .from('adresy')
-          .select('geom, kod_pocztowy') // NOWE: Pobieramy też kod
+          .select('geom, kod_pocztowy')
           .eq('lokalizacja_id', id)
           .eq('numer_domu', point)
           .single();
@@ -76,7 +74,6 @@ function Details() {
     }
     
     try {
-      // NOWE: Dodałem &addressdetails=1 aby dostać kod pocztowy
       const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}`;
       
       const res = await fetch(url);
@@ -84,62 +81,24 @@ function Details() {
 
       if (data && data.length > 0) {
         const resultCoords = `${data[0].lat}, ${data[0].lon}`;
-        
-        // NOWE: Wyciągamy kod pocztowy z odpowiedzi API
-        // Czasami API zwraca 'postcode', upewniamy się że istnieje
         const resultPostCode = data[0].address?.postcode || null;
-
-        if (resultPostCode) {
-            console.log("Znaleziono kod pocztowy:", resultPostCode);
-        }
         
-        // --- ZAPISUJEMY I SPRAWDZAMY BŁĘDY ---
-        
+        // --- ZAPIS DO BAZY ---
         if (point === 'center') {
-          // Zapis do LOKALIZACJE
-          const updateData = { 
-              geom: resultCoords, 
-              status: 'zgeokodowane', 
-              jakosc: 100 
-          };
-          // Dodajemy kod pocztowy do zapisu tylko jeśli API go zwróciło
+          const updateData = { geom: resultCoords, status: 'zgeokodowane', jakosc: 100 };
           if (resultPostCode) updateData.kod_pocztowy = resultPostCode;
 
-          const { error } = await supabase
-            .from('lokalizacje')
-            .update(updateData)
-            .eq('id', id);
-
-          if (error) {
-            alert("Błąd zapisu do bazy! " + error.message);
-          } else {
-            setCoords(resultCoords);
-            if (resultPostCode) setPostalCode(resultPostCode);
-          }
-
+          await supabase.from('lokalizacje').update(updateData).eq('id', id);
         } else {
-          // Zapis do ADRESY
-          const upsertData = { 
-              lokalizacja_id: id, 
-              numer_domu: point, 
-              geom: resultCoords 
-          };
+          const upsertData = { lokalizacja_id: id, numer_domu: point, geom: resultCoords };
           if (resultPostCode) upsertData.kod_pocztowy = resultPostCode;
 
-          const { error } = await supabase
-            .from('adresy')
-            .upsert(
-              upsertData, 
-              { onConflict: 'lokalizacja_id, numer_domu' }
-            );
-            
-          if (error) {
-            alert("Błąd zapisu adresu! " + error.message);
-          } else {
-            setCoords(resultCoords);
-            if (resultPostCode) setPostalCode(resultPostCode);
-          }
+          await supabase.from('adresy').upsert(upsertData, { onConflict: 'lokalizacja_id, numer_domu' });
         }
+
+        setCoords(resultCoords);
+        if (resultPostCode) setPostalCode(resultPostCode);
+
       } else {
         alert("Nie znaleziono współrzędnych.");
       }
@@ -149,6 +108,29 @@ function Details() {
     } finally {
       setProcessing(false);
     }
+  };
+
+  // NOWE: Funkcja pobierania pojedynczego pliku
+  const handleDownloadSingle = () => {
+      if (!location || !coords) return;
+
+      // Tworzymy treść pliku CSV
+      // \uFEFF to znacznik BOM, dzięki któremu Excel poprawnie czyta polskie znaki
+      const headers = "Województwo;Miejscowość;Ulica;Numer;Kod Pocztowy;Współrzędne\n";
+      const row = `${location.wojewodztwo};${location.miejscowosc};${location.ulica};${point === 'center' ? 'Środek' : point};${postalCode || 'Brak'};${coords}`;
+      
+      const csvContent = "\uFEFF" + headers + row;
+
+      // Tworzenie pliku w przeglądarce
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      // Nazwa pliku np: raport_Marszalkowska_Warszawa.csv
+      link.setAttribute('download', `dane_${location.ulica.replace(/\s/g, '_')}_${location.miejscowosc}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
   };
 
   if (loading) return <div className="App"><p style={{marginTop:'50px'}}>Ładowanie...</p></div>;
@@ -175,7 +157,6 @@ function Details() {
         {/* --- SEKCJA WYNIKÓW --- */}
         <div style={{ margin: '30px 0', textAlign: 'center' }}>
           
-          {/* Wyświetlanie kodu pocztowego */}
           {postalCode && (
               <div className="postal-badge-container">
                   <span className="postal-label">Kod Pocztowy:</span>
@@ -196,18 +177,31 @@ function Details() {
           )}
         </div>
 
-        {coords ? (
-           <a 
-             href={`https://www.google.com/maps/search/?api=1&query=${coords}`} 
-             target="_blank" rel="noreferrer"
-             className="btn-search" style={{ backgroundColor: '#2980b9' }}>
-             Pokaż na Google Maps 🗺️
-           </a>
-        ) : (
-          <button className="btn-search" onClick={handleGeocode} disabled={processing}>
-            {processing ? 'Pobieranie...' : `📍 Pobierz pozycję i Kod Pocztowy`}
-          </button>
-        )}
+        {/* --- PRZYCISKI AKCJI --- */}
+        <div className="action-buttons">
+            {coords ? (
+            <>
+                {/* Przycisk Google Maps */}
+                <a 
+                    href={`https://www.google.com/maps/search/?api=1&query=${coords}`} 
+                    target="_blank" rel="noreferrer"
+                    className="btn-search" style={{ backgroundColor: '#2980b9', marginRight: '10px' }}>
+                    Pokaż na mapie 🗺️
+                </a>
+
+                {/* NOWE: Przycisk Pobierania */}
+                <button 
+                    onClick={handleDownloadSingle}
+                    className="btn-download">
+                    Pobierz dane 📥
+                </button>
+            </>
+            ) : (
+            <button className="btn-search" onClick={handleGeocode} disabled={processing}>
+                {processing ? 'Pobieranie...' : `📍 Pobierz pozycję i Kod Pocztowy`}
+            </button>
+            )}
+        </div>
       </div>
     </div>
   );
