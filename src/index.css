@@ -1,0 +1,8 @@
+/* src/index.css */
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  background-color: #f4f7f6; /* Taki sam kolor jak w aplikacji */
+  box-sizing: border-box;
+}
