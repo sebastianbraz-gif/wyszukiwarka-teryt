@@ -13,7 +13,7 @@
   padding: 0;
 }
 
-/* --- LOGOWANIE MODAL --- */
+/* --- LOGOWANIE I MODALE --- */
 .login-modal-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background-color: rgba(0,0,0,0.6); z-index: 1000;
@@ -22,30 +22,59 @@
 }
 
 .login-modal {
-    background: white; padding: 30px; border-radius: 10px; width: 350px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.2); text-align: left;
+    background: white; padding: 30px; border-radius: 12px; width: 400px;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.25); text-align: left;
     animation: fadeIn 0.3s ease-out;
 }
 
-.login-modal h2 { margin-top: 0; color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-.login-modal input {
-    width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd;
-    border-radius: 5px; box-sizing: border-box; font-size: 16px;
-}
-.login-modal input:focus { border-color: #3498db; outline: none; }
-.login-error { color: #e74c3c; font-size: 0.9em; margin-bottom: 10px; font-weight: bold; }
+.login-modal h2 { margin-top: 0; color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 20px; text-align: center; }
 
-.login-buttons { display: flex; gap: 10px; margin-top: 15px; }
+.login-modal input[type="text"], 
+.login-modal input[type="password"] {
+    width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd;
+    border-radius: 6px; box-sizing: border-box; font-size: 16px; transition: border 0.3s;
+}
+.login-modal input:focus { border-color: #3498db; outline: none; box-shadow: 0 0 5px rgba(52, 152, 219, 0.2); }
+
+.login-error { color: #e74c3c; font-size: 0.9em; margin-bottom: 10px; font-weight: bold; text-align: center; }
+
+.login-buttons { display: flex; gap: 10px; margin-top: 25px; }
 .btn-confirm-login {
-    flex: 1; background-color: #2ecc71; color: white; border: none; padding: 10px;
-    border-radius: 5px; cursor: pointer; font-weight: bold;
+    flex: 1; background-color: #2ecc71; color: white; border: none; padding: 12px;
+    border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; transition: 0.2s;
 }
-.btn-confirm-login:hover { background-color: #27ae60; }
+.btn-confirm-login:hover { background-color: #27ae60; transform: translateY(-1px); }
+
 .btn-cancel-login {
-    flex: 1; background-color: #95a5a6; color: white; border: none; padding: 10px;
-    border-radius: 5px; cursor: pointer;
+    flex: 1; background-color: #ecf0f1; color: #7f8c8d; border: none; padding: 12px;
+    border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; transition: 0.2s;
 }
-.btn-cancel-login:hover { background-color: #7f8c8d; }
+.btn-cancel-login:hover { background-color: #bdc3c7; color: #2c3e50; }
+
+/* --- NOWE: MODAL ZGŁOSZENIOWY (STYLIZACJA) --- */
+.report-options {
+    display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;
+}
+
+.report-card {
+    display: flex; align-items: center; padding: 15px;
+    border: 2px solid #eee; border-radius: 8px; cursor: pointer;
+    transition: all 0.2s ease; background-color: #fff;
+}
+
+.report-card:hover { border-color: #bdc3c7; background-color: #f9f9f9; }
+
+/* Styl dla zaznaczonej opcji */
+.report-card.selected {
+    border-color: #3498db; background-color: #eaf6fd;
+}
+.report-card.selected-danger {
+    border-color: #e74c3c; background-color: #fdedec;
+}
+
+.report-card input { margin-right: 15px; transform: scale(1.2); cursor: pointer; }
+.report-text { font-weight: 600; font-size: 1.05em; color: #34495e; }
+.report-text.danger { color: #c0392b; }
 
 
 /* --- HEADER I NAWIGACJA --- */
@@ -75,12 +104,9 @@
     background-color: #e74c3c; color: white; padding: 10px 20px; border: none; border-radius: 25px;
     font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(231, 76, 60, 0.3); animation: pulse 2s infinite;
 }
-
-/* NOWE: Przycisk Audytora */
 .btn-audit-nav {
     background-color: #8e44ad; color: white; padding: 10px 20px; border: none; border-radius: 25px;
-    font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(142, 68, 173, 0.3);
-    transition: transform 0.2s;
+    font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(142, 68, 173, 0.3); transition: transform 0.2s;
 }
 .btn-audit-nav:hover { transform: scale(1.05); background-color: #732d91; }
 
@@ -125,7 +151,7 @@ table tbody tr:hover { background-color: #e0f2f1; }
 .addr-city { font-size: 1.3em; font-weight: bold; color: #2c3e50; display: block; margin: 4px 0; }
 .addr-subinfo { font-size: 0.95em; color: #666; display: block; }
 
-/* Przyciski Akcji */
+/* PRZYCISKI AKCJI */
 .action-buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center; }
 .btn-search {
   background-color: #27ae60; color: white; border: none; padding: 10px 20px;
@@ -146,29 +172,46 @@ table tbody tr:hover { background-color: #e0f2f1; }
 }
 .btn-download:hover { background-color: #732d91; transform: translateY(-2px); }
 
-/* Przycisk Zgłoś Błąd */
 .btn-report-error {
     background-color: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%;
 }
 .btn-report-error:hover { background-color: #c0392b; }
 
-/* Tabela Operatora */
+.btn-edit-small {
+    background: none; border: none; cursor: pointer; font-size: 1.1em; margin-left: 8px; opacity: 0.7; transition: 0.2s;
+}
+.btn-edit-small:hover { opacity: 1; transform: scale(1.2); }
+
+.btn-undo-change {
+    background-color: #f39c12; color: white; border: none; padding: 5px 10px;
+    border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.8em;
+}
+.btn-undo-change:hover { background-color: #d35400; }
+
+/* TABELA OPERATORA I AUDYTORA */
 .reports-table th { background-color: #d35400; color: white; }
 .btn-accept { background-color: #27ae60; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em; }
 .btn-reject { background-color: #7f8c8d; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em; }
 
-/* Tabela Audytora */
+/* NOWE: Przycisk Zmień Kod (Niebieski) */
+.btn-change {
+    background-color: #3498db; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold;
+}
+.btn-change:hover { background-color: #2980b9; }
+
 .audit-table th { background-color: #c0392b; color: white; }
-.logs-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.9em; }
-.logs-table th { background-color: #34495e; color: white; padding: 10px; }
-.logs-table td { padding: 8px; border-bottom: 1px solid #eee; }
-.tag-operator { background: #d35400; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; }
-.tag-auditor { background: #8e44ad; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; }
 .btn-restore {
     background-color: #27ae60; color: white; border: none; padding: 8px 15px;
     border-radius: 4px; cursor: pointer; font-weight: bold;
 }
 .btn-restore:hover { background-color: #219150; }
+
+/* LOGI */
+.logs-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.9em; }
+.logs-table th { background-color: #34495e; color: white; padding: 10px; }
+.logs-table td { padding: 8px; border-bottom: 1px solid #eee; }
+.tag-operator { background: #d35400; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; }
+.tag-auditor { background: #8e44ad; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; }
 
 /* BADGES */
 .info-badge {

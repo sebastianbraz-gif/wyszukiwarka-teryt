@@ -14,10 +14,24 @@ function Details() {
   const [postalCode, setPostalCode] = useState(null);
   const [elevation, setElevation] = useState(null);
 
+  // Stany techniczne
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  
+  // Stany do edycji (Operator/Audytor)
+  const [userRole, setUserRole] = useState(localStorage.getItem('user_role') || 'guest');
+  const [isEditing, setIsEditing] = useState(false);
+  const [newPostal, setNewPostal] = useState('');
+  
+  // ID rekordu do edycji
+  const [currentRecordInfo, setCurrentRecordInfo] = useState({ table: '', id: null });
 
-  // 1. Pobieranie danych z bazy
+  // --- NOWE STANY DO ZGŁASZANIA BŁĘDÓW ---
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportType, setReportType] = useState('kod'); // 'kod' lub 'brak'
+  const [reportNote, setReportNote] = useState('');
+
+  // 1. Pobieranie danych
   useEffect(() => {
     async function getData() {
       const { data: streetData, error } = await supabase
@@ -27,13 +41,13 @@ function Details() {
         .single();
         
       if (error || !streetData) {
-        console.error("Błąd pobierania ulicy:", error);
+        console.error("Błąd pobierania:", error);
         setLoading(false);
         return;
       }
 
       if (streetData.czy_usuniety) {
-          alert("Ta lokalizacja została usunięta z bazy przez Operatora.");
+          alert("Lokalizacja usunięta.");
           navigate('/');
           return;
       }
@@ -43,6 +57,7 @@ function Details() {
       if (point === 'center') {
         if (streetData.geom) setCoords(streetData.geom);
         if (streetData.kod_pocztowy) setPostalCode(streetData.kod_pocztowy);
+        setCurrentRecordInfo({ table: 'lokalizacje', id: streetData.id });
       } else {
         const { data: addressData } = await supabase
           .from('adresy')
@@ -53,12 +68,13 @@ function Details() {
 
         if (addressData) {
           if (addressData.czy_usuniety) {
-              alert(`Adres ${streetData.ulica} ${point} został usunięty przez Operatora.`);
+              alert("Adres usunięty.");
               navigate(`/select/${id}`);
               return;
           }
           if (addressData.geom) setCoords(addressData.geom);
           if (addressData.kod_pocztowy) setPostalCode(addressData.kod_pocztowy);
+          setCurrentRecordInfo({ table: 'adresy', id: addressData.id });
         }
       }
       setLoading(false);
@@ -66,7 +82,7 @@ function Details() {
     getData();
   }, [id, point, navigate]);
 
-  // 2. Wysokość n.p.m.
+  // 2. Wysokość
   useEffect(() => {
     async function fetchElevation() {
         if (!coords) return;
@@ -75,13 +91,8 @@ function Details() {
             const url = `https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`;
             const res = await fetch(url);
             const data = await res.json();
-
-            if (data && data.elevation) {
-                setElevation(data.elevation[0].toFixed(1));
-            }
-        } catch (err) {
-            console.error("Błąd pobierania wysokości:", err);
-        }
+            if (data && data.elevation) setElevation(data.elevation[0].toFixed(1));
+        } catch (err) { console.error(err); }
     }
     fetchElevation();
   }, [coords]);
@@ -90,19 +101,13 @@ function Details() {
   const handleGeocode = async () => {
     if (!location) return;
     setProcessing(true);
-
     const cleanUlica = location.ulica.replace(/ul\.|al\.|pl\./g, '').trim();
-    
-    let query = "";
-    if (point === 'center') {
-      query = `${cleanUlica}, ${location.miejscowosc}, ${location.wojewodztwo}`;
-    } else {
-      query = `${cleanUlica} ${point}, ${location.miejscowosc}, ${location.wojewodztwo}`;
-    }
+    const query = point === 'center' 
+        ? `${cleanUlica}, ${location.miejscowosc}, ${location.wojewodztwo}`
+        : `${cleanUlica} ${point}, ${location.miejscowosc}, ${location.wojewodztwo}`;
     
     try {
-      const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}`;
-      const res = await fetch(url);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}`);
       const data = await res.json();
 
       if (data && data.length > 0) {
@@ -113,100 +118,104 @@ function Details() {
           const updateData = { geom: resultCoords, status: 'zgeokodowane', jakosc: 100 };
           if (resultPostCode) updateData.kod_pocztowy = resultPostCode;
           await supabase.from('lokalizacje').update(updateData).eq('id', id);
+          if (resultPostCode) setPostalCode(resultPostCode);
         } else {
           const upsertData = { lokalizacja_id: id, numer_domu: point, geom: resultCoords };
           if (resultPostCode) upsertData.kod_pocztowy = resultPostCode;
-          await supabase.from('adresy').upsert(upsertData, { onConflict: 'lokalizacja_id, numer_domu' });
+          const { data: newAddr } = await supabase.from('adresy')
+            .upsert(upsertData, { onConflict: 'lokalizacja_id, numer_domu' })
+            .select()
+            .single();
+            
+          if (newAddr) setCurrentRecordInfo({ table: 'adresy', id: newAddr.id });
+          if (resultPostCode) setPostalCode(resultPostCode);
         }
-
         setCoords(resultCoords);
-        if (resultPostCode) setPostalCode(resultPostCode);
-      } else {
-        alert("Nie znaleziono współrzędnych.");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Błąd połączenia.");
-    } finally {
-      setProcessing(false);
-    }
+      } else { alert("Nie znaleziono współrzędnych."); }
+    } catch (err) { alert("Błąd połączenia."); } 
+    finally { setProcessing(false); }
   };
 
-  // --- TUTAJ BYŁ BŁĄD (NAPRAWIONE LINKI) ---
+  // 4. Edycja Kodu
+  const startEditing = () => { setNewPostal(postalCode || ''); setIsEditing(true); };
 
-  // 4. Pobieranie pojedynczego pliku CSV
+  const savePostalCode = async () => {
+      if (!currentRecordInfo.id) { alert("Brak rekordu. Najpierw pobierz dane."); return; }
+      try {
+          const { error } = await supabase
+            .from(currentRecordInfo.table)
+            .update({ kod_pocztowy: newPostal })
+            .eq('id', currentRecordInfo.id);
+          if (error) throw error;
+
+          await supabase.from('logi_systemowe').insert([{
+              rola: userRole,
+              akcja: 'zmiana_kodu',
+              opis_szczegolowy: `Zmiana kodu z "${postalCode}" na "${newPostal}" dla ${location.ulica} ${point}`,
+              tabela: currentRecordInfo.table,
+              rekord_id: currentRecordInfo.id,
+              poprzednie_dane: { kod_pocztowy: postalCode }
+          }]);
+          setPostalCode(newPostal); setIsEditing(false); alert("Zapisano!");
+      } catch (err) { alert("Błąd: " + err.message); }
+  };
+
+  // 5. Pobieranie / Raport
   const handleDownloadSingle = () => {
       if (!location || !coords) return;
-      
-      // POPRAWIONY LINK:
-      const googleLink = `https://www.google.com/maps?q=${coords.replace(' ', '')}`;
-
-      const headers = "Województwo;Miejscowość;Ulica;Numer;Kod Pocztowy;Wysokość n.p.m.;Współrzędne;Link do Mapy\n";
-      const row = `${location.wojewodztwo};${location.miejscowosc};${location.ulica};${point === 'center' ? 'Środek' : point};${postalCode || 'Brak'};${elevation ? elevation + ' m' : 'Brak'};${coords};${googleLink}`;
-      
-      const csvContent = "\uFEFF" + headers + row;
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `dane_${location.ulica}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const googleLink = `http://googleusercontent.com/maps.google.com/?q=${coords.replace(' ', '')}`;
+      const headers = "Województwo;Miejscowość;Ulica;Numer;Kod Pocztowy;Wysokość;Współrzędne;Link\n";
+      const row = `${location.wojewodztwo};${location.miejscowosc};${location.ulica};${point === 'center' ? 'Środek' : point};${postalCode || 'Brak'};${elevation};${coords};${googleLink}`;
+      const blob = new Blob(["\uFEFF" + headers + row], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `dane.csv`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
-  // 5. Dodawanie do raportu (LocalStorage)
   const handleAddToReport = () => {
     if (!location || !coords) return;
-
-    // POPRAWIONY LINK:
-    const googleLink = `https://www.google.com/maps?q=${coords.replace(' ', '')}`;
-
     const newItem = {
       id: `${id}-${point}`,
-      wojewodztwo: location.wojewodztwo,
-      miejscowosc: location.miejscowosc,
-      ulica: location.ulica,
-      numer: point === 'center' ? 'Środek' : point,
-      kod: postalCode || 'Brak',
-      wysokosc: elevation ? `${elevation} m` : 'Brak',
-      wspolrzedne: coords,
-      link_mapy: googleLink,
+      wojewodztwo: location.wojewodztwo, miejscowosc: location.miejscowosc, ulica: location.ulica, numer: point === 'center' ? 'Środek' : point,
+      kod: postalCode || 'Brak', wysokosc: elevation ? `${elevation} m` : 'Brak', wspolrzedne: coords,
+      link_mapy: `http://googleusercontent.com/maps.google.com/?q=${coords.replace(' ', '')}`,
       data_dodania: new Date().toLocaleString()
     };
-
-    const existingReport = JSON.parse(localStorage.getItem('my_report') || '[]');
-    const exists = existingReport.find(item => item.id === newItem.id);
-    
-    if (exists) {
-      alert("To miejsce jest już w Twoim raporcie!");
-      return;
-    }
-
-    const newReport = [...existingReport, newItem];
-    localStorage.setItem('my_report', JSON.stringify(newReport));
-    alert(`Dodano do raportu! Masz już ${newReport.length} pozycji.`);
+    const report = JSON.parse(localStorage.getItem('my_report') || '[]');
+    if (report.find(i => i.id === newItem.id)) { alert("Już jest w raporcie!"); return; }
+    localStorage.setItem('my_report', JSON.stringify([...report, newItem]));
+    alert("Dodano do raportu!");
   };
 
-  const handleReportError = async () => {
-    const reason = prompt("Opisz krótko błąd (np. 'Ten numer nie istnieje'):");
-    if (!reason) return;
+  // --- NOWE: FUNKCJA ZGŁASZANIA Z MODALEM ---
+  const openReportModal = () => {
+      setReportType('kod');
+      setReportNote('');
+      setShowReportModal(true);
+  };
 
-    try {
-        const { error } = await supabase
-            .from('zgloszenia')
-            .insert([{
-                lokalizacja_id: id,
-                numer_domu: point,
-                opis: reason,
-                status: 'oczekujace'
-            }]);
+  const submitReport = async () => {
+      let finalDescription = '';
 
-        if (error) throw error;
-        alert("Dziękujemy! Zgłoszenie zostało wysłane do Operatora.");
-    } catch (err) {
-        alert("Błąd wysyłania: " + err.message);
-    }
+      if (reportType === 'kod') {
+          if (!reportNote) { alert("Podaj poprawny kod pocztowy!"); return; }
+          finalDescription = `[BŁĄD KODU] Użytkownik sugeruje zmianę na: ${reportNote}`;
+      } else {
+          finalDescription = `[ADRES NIE ISTNIEJE] Użytkownik zgłasza, że ten budynek nie istnieje.`;
+      }
+
+      try {
+          const { error } = await supabase.from('zgloszenia').insert([{ 
+              lokalizacja_id: id, 
+              numer_domu: point, 
+              opis: finalDescription, 
+              status: 'oczekujace' 
+          }]);
+
+          if (error) throw error;
+          alert("Zgłoszenie wysłane! Dziękujemy.");
+          setShowReportModal(false);
+      } catch (err) {
+          alert("Błąd wysyłania: " + err.message);
+      }
   };
 
   if (loading) return <div className="App"><p style={{marginTop:'50px'}}>Ładowanie...</p></div>;
@@ -214,90 +223,105 @@ function Details() {
 
   return (
     <div className="App">
+      
+      {/* --- MODAL ZGŁOSZENIOWY --- */}
+      {showReportModal && (
+          <div className="login-modal-overlay">
+              <div className="login-modal" style={{width: '400px'}}>
+                  <h2>Co się nie zgadza?</h2>
+                  
+                  <div style={{margin: '20px 0'}}>
+                      <label style={{display: 'block', marginBottom: '10px', cursor: 'pointer'}}>
+                          <input 
+                            type="radio" 
+                            name="rtype" 
+                            checked={reportType === 'kod'} 
+                            onChange={() => setReportType('kod')} 
+                          /> 
+                          <span style={{marginLeft: '8px', fontWeight: 'bold'}}>Błędny Kod Pocztowy</span>
+                      </label>
+
+                      <label style={{display: 'block', marginBottom: '10px', cursor: 'pointer'}}>
+                          <input 
+                            type="radio" 
+                            name="rtype" 
+                            checked={reportType === 'brak'} 
+                            onChange={() => setReportType('brak')} 
+                          /> 
+                          <span style={{marginLeft: '8px', fontWeight: 'bold', color: '#c0392b'}}>Ten adres nie istnieje</span>
+                      </label>
+                  </div>
+
+                  {reportType === 'kod' && (
+                      <input 
+                        type="text" 
+                        placeholder="Podaj poprawny kod (np. 00-123)" 
+                        value={reportNote}
+                        onChange={(e) => setReportNote(e.target.value)}
+                        autoFocus
+                      />
+                  )}
+
+                  <div className="login-buttons">
+                      <button onClick={submitReport} className="btn-confirm-login">Wyślij Zgłoszenie</button>
+                      <button onClick={() => setShowReportModal(false)} className="btn-cancel-login">Anuluj</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       <header className="app-header">
         <span className="header-subinfo">woj. {location.wojewodztwo}</span>
-        <h1 className="header-city">
-          {location.ulica} {point !== 'center' ? point : ''}
-        </h1>
+        <h1 className="header-city">{location.ulica} {point !== 'center' ? point : ''}</h1>
         <span className="header-subinfo">{location.miejscowosc}</span>
-        
-        <div style={{ marginTop: '10px', fontSize: '0.9em', background: 'rgba(255,255,255,0.1)', padding: '5px 15px', borderRadius: '20px' }}>
-           Dokładność: {point === 'center' ? 'Środek Ulicy' : 'Konkretny Budynek'}
-        </div>
       </header>
 
       <div className="table-container">
-        <Link to={`/select/${id}`} style={{ color: 'black', marginBottom: '20px', textDecoration: 'none' }}>
-           🠔 Wróć do wyboru
-        </Link>
+        <Link to={`/select/${id}`} style={{ color: 'black', marginBottom: '20px', textDecoration: 'none' }}>🠔 Wróć do wyboru</Link>
 
         <div style={{ margin: '30px 0', textAlign: 'center' }}>
-          
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap' }}>
-              {postalCode && (
-                  <div className="info-badge postal-badge">
-                      <span className="badge-label">Kod Pocztowy</span>
-                      <span className="badge-value">{postalCode}</span>
-                  </div>
-              )}
-              {elevation && (
-                  <div className="info-badge elevation-badge">
-                      <span className="badge-label">Wysokość n.p.m.</span>
-                      <span className="badge-value">{elevation} m</span>
-                  </div>
-              )}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div className="info-badge postal-badge">
+                  <span className="badge-label">Kod Pocztowy</span>
+                  {isEditing ? (
+                      <div style={{display: 'flex', alignItems: 'center', gap: '5px'}}>
+                          <input type="text" value={newPostal} onChange={(e) => setNewPostal(e.target.value)} style={{width: '70px', padding: '2px'}}/>
+                          <button onClick={savePostalCode} style={{cursor: 'pointer', background: '#27ae60', color:'white', border:'none'}}>OK</button>
+                          <button onClick={() => setIsEditing(false)} style={{cursor: 'pointer', background: '#c0392b', color:'white', border:'none'}}>X</button>
+                      </div>
+                  ) : (
+                      <>
+                        <span className="badge-value">{postalCode || 'Brak'}</span>
+                        {(userRole === 'operator' || userRole === 'audytor') && (
+                            <button onClick={startEditing} className="btn-edit-small" title="Edytuj kod">✏️</button>
+                        )}
+                      </>
+                  )}
+              </div>
+              {elevation && <div className="info-badge elevation-badge"><span className="badge-label">Wysokość n.p.m.</span><span className="badge-value">{elevation} m</span></div>}
           </div>
 
-          <strong style={{ display: 'block', marginBottom: '10px', color: '#555', marginTop: '20px' }}>
-            Współrzędne GPS:
-          </strong>
-          
-          {coords ? (
-            <span style={{ color: '#27ae60', fontFamily: 'monospace', fontSize: '1.4em', background: '#e8f6f3', padding: '10px 20px', borderRadius: '5px' }}>
-              {coords}
-            </span>
-          ) : (
-            <span style={{ color: '#e74c3c' }}>Brak danych (wymaga pobrania)</span>
-          )}
+          <strong style={{ display: 'block', marginBottom: '10px', color: '#555', marginTop: '20px' }}>Współrzędne GPS:</strong>
+          {coords ? <span style={{ color: '#27ae60', fontFamily: 'monospace', fontSize: '1.4em', background: '#e8f6f3', padding: '10px 20px', borderRadius: '5px' }}>{coords}</span> : <span style={{ color: '#e74c3c' }}>Brak danych</span>}
         </div>
 
         <div className="action-buttons">
             {coords ? (
             <>
-                {/* POPRAWIONY LINK W PRZYCISKU: */}
-                <a 
-                    href={`https://www.google.com/maps?q=${coords.replace(' ', '')}`} 
-                    target="_blank" rel="noreferrer"
-                    className="btn-search" style={{ backgroundColor: '#2980b9' }}>
-                    Mapa 🗺️
-                </a>
-
-                <button 
-                    onClick={handleAddToReport}
-                    className="btn-add-report">
-                    + Dodaj do raportu
-                </button>
-
-                <button 
-                    onClick={handleDownloadSingle}
-                    className="btn-download">
-                    Pobierz ten plik 📥
-                </button>
+                <a href={`http://googleusercontent.com/maps.google.com/?q=${coords.replace(' ', '')}`} target="_blank" rel="noreferrer" className="btn-search" style={{ backgroundColor: '#2980b9' }}>Mapa 🗺️</a>
+                <button onClick={handleAddToReport} className="btn-add-report">+ Dodaj do raportu</button>
+                <button onClick={handleDownloadSingle} className="btn-download">Pobierz ten plik 📥</button>
             </>
             ) : (
-            <button className="btn-search" onClick={handleGeocode} disabled={processing}>
-                {processing ? 'Pobieranie...' : `📍 Pobierz pozycję i Dane`}
-            </button>
+            <button className="btn-search" onClick={handleGeocode} disabled={processing}>{processing ? 'Pobieranie...' : `📍 Pobierz pozycję i Dane`}</button>
             )}
         </div>
 
         <div style={{marginTop: '30px', padding: '15px', border: '1px dashed #e74c3c', borderRadius: '8px', backgroundColor: '#fdf2f2', width: '90%'}}>
             <p style={{color: '#c0392b', fontSize: '0.9em', margin: '0 0 10px 0'}}>Widzisz błąd w danych?</p>
-            <button onClick={handleReportError} className="btn-report-error">
-                📢 Zgłoś błąd tego adresu
-            </button>
+            {/* ZMIANA: Wywołanie modala zamiast prompta */}
+            <button onClick={openReportModal} className="btn-report-error">📢 Zgłoś błąd tego adresu</button>
         </div>
-
       </div>
     </div>
   );
