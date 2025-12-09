@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import './App.css';
 
 function Details() {
   const { id, point } = useParams();
+  const navigate = useNavigate();
   
   const [location, setLocation] = useState(null);
   
@@ -16,34 +17,52 @@ function Details() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
-  // 1. Pobieranie danych z bazy przy wejściu
+  // 1. Pobieranie danych z bazy przy wejściu (z zabezpieczeniem Soft Delete)
   useEffect(() => {
     async function getData() {
+      // Pobierz dane ulicy
       const { data: streetData, error } = await supabase
         .from('lokalizacje')
         .select('*')
         .eq('id', id)
         .single();
         
-      if (error) {
+      if (error || !streetData) {
         console.error("Błąd pobierania ulicy:", error);
         setLoading(false);
         return;
       }
+
+      // --- ZABEZPIECZENIE: CZY ULICA USUNIĘTA? ---
+      if (streetData.czy_usuniety) {
+          alert("Ta lokalizacja została usunięta z bazy przez Operatora.");
+          navigate('/'); // Wyrzuć na stronę główną
+          return;
+      }
+
       setLocation(streetData);
 
+      // SPRAWDZANIE PAMIĘCI (CACHE) DLA PUNKTU
       if (point === 'center') {
         if (streetData.geom) setCoords(streetData.geom);
         if (streetData.kod_pocztowy) setPostalCode(streetData.kod_pocztowy);
+
       } else {
         const { data: addressData } = await supabase
           .from('adresy')
-          .select('geom, kod_pocztowy')
+          .select('*')
           .eq('lokalizacja_id', id)
           .eq('numer_domu', point)
           .single();
 
         if (addressData) {
+          // --- ZABEZPIECZENIE: CZY ADRES USUNIĘTY? ---
+          if (addressData.czy_usuniety) {
+              alert(`Adres ${streetData.ulica} ${point} został usunięty przez Operatora.`);
+              navigate(`/select/${id}`); // Wróć do wyboru numerów
+              return;
+          }
+
           if (addressData.geom) setCoords(addressData.geom);
           if (addressData.kod_pocztowy) setPostalCode(addressData.kod_pocztowy);
         }
@@ -51,7 +70,7 @@ function Details() {
       setLoading(false);
     }
     getData();
-  }, [id, point]);
+  }, [id, point, navigate]);
 
   // 2. Efekt do pobierania Wysokości n.p.m.
   useEffect(() => {
@@ -119,11 +138,11 @@ function Details() {
     }
   };
 
-  // 4. Pobieranie pojedynczego pliku CSV (Z LINKIEM)
+  // 4. Pobieranie pojedynczego pliku CSV
   const handleDownloadSingle = () => {
       if (!location || !coords) return;
       
-      const googleLink = `https://www.google.com/maps?q=${coords.replace(' ', '')}`;
+      const googleLink = `http://googleusercontent.com/maps.google.com/?q=${coords.replace(' ', '')}`;
 
       const headers = "Województwo;Miejscowość;Ulica;Numer;Kod Pocztowy;Wysokość n.p.m.;Współrzędne;Link do Mapy\n";
       const row = `${location.wojewodztwo};${location.miejscowosc};${location.ulica};${point === 'center' ? 'Środek' : point};${postalCode || 'Brak'};${elevation ? elevation + ' m' : 'Brak'};${coords};${googleLink}`;
@@ -139,12 +158,11 @@ function Details() {
       document.body.removeChild(link);
   };
 
-  // 5. Dodawanie do raportu (LocalStorage) (Z LINKIEM)
+  // 5. Dodawanie do raportu
   const handleAddToReport = () => {
     if (!location || !coords) return;
 
-    // Generujemy link do Google Maps
-    const googleLink = `https://www.google.com/maps?q=${coords.replace(' ', '')}`;
+    const googleLink = `http://googleusercontent.com/maps.google.com/?q=${coords.replace(' ', '')}`;
 
     const newItem = {
       id: `${id}-${point}`,
@@ -155,7 +173,7 @@ function Details() {
       kod: postalCode || 'Brak',
       wysokosc: elevation ? `${elevation} m` : 'Brak',
       wspolrzedne: coords,
-      link_mapy: googleLink, // NOWE POLA
+      link_mapy: googleLink,
       data_dodania: new Date().toLocaleString()
     };
 
@@ -172,7 +190,30 @@ function Details() {
     alert(`Dodano do raportu! Masz już ${newReport.length} pozycji.`);
   };
 
+  // 6. Zgłaszanie błędów
+  const handleReportError = async () => {
+    const reason = prompt("Opisz krótko błąd (np. 'Ten numer nie istnieje'):");
+    if (!reason) return;
+
+    try {
+        const { error } = await supabase
+            .from('zgloszenia')
+            .insert([{
+                lokalizacja_id: id,
+                numer_domu: point,
+                opis: reason,
+                status: 'oczekujace'
+            }]);
+
+        if (error) throw error;
+        alert("Dziękujemy! Zgłoszenie zostało wysłane do Operatora.");
+    } catch (err) {
+        alert("Błąd wysyłania: " + err.message);
+    }
+  };
+
   if (loading) return <div className="App"><p style={{marginTop:'50px'}}>Ładowanie...</p></div>;
+  if (!location) return <div className="App"><p>Brak danych.</p></div>;
 
   return (
     <div className="App">
@@ -189,7 +230,8 @@ function Details() {
       </header>
 
       <div className="table-container">
-        <Link to={`/select/${id}`} style={{ color: '#7f8c8d', marginBottom: '20px', textDecoration: 'none' }}>
+        {/* ZMIANA: Link powrotu na czarno */}
+        <Link to={`/select/${id}`} style={{ color: 'black', marginBottom: '20px', textDecoration: 'none' }}>
            🠔 Wróć do wyboru
         </Link>
 
@@ -223,11 +265,12 @@ function Details() {
           )}
         </div>
 
+        {/* --- PRZYCISKI AKCJI --- */}
         <div className="action-buttons">
             {coords ? (
             <>
                 <a 
-                    href={`https://www.google.com/maps?q=${coords}`} 
+                    href={`http://googleusercontent.com/maps.google.com/?q=${coords.replace(' ', '')}`} 
                     target="_blank" rel="noreferrer"
                     className="btn-search" style={{ backgroundColor: '#2980b9' }}>
                     Mapa 🗺️
@@ -251,6 +294,15 @@ function Details() {
             </button>
             )}
         </div>
+
+        {/* Sekcja Zgłaszania Błędów */}
+        <div style={{marginTop: '30px', padding: '15px', border: '1px dashed #e74c3c', borderRadius: '8px', backgroundColor: '#fdf2f2', width: '90%'}}>
+            <p style={{color: '#c0392b', fontSize: '0.9em', margin: '0 0 10px 0'}}>Widzisz błąd w danych?</p>
+            <button onClick={handleReportError} className="btn-report-error">
+                📢 Zgłoś błąd tego adresu
+            </button>
+        </div>
+
       </div>
     </div>
   );

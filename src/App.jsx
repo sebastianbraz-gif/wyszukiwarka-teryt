@@ -3,20 +3,28 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Home from './Home';
 import SelectMode from './SelectMode';
 import Details from './Details';
+import Reports from './Reports';
+import Audit from './Audit'; // NOWE: Import panelu Audytora
 import './App.css';
 
 function App() {
   return (
     <Router>
       <Routes>
-        {/* Krok 1: Wyszukiwarka (Miasto + Ulica) */}
+        {/* Strona główna */}
         <Route path="/" element={<Home />} />
         
-        {/* Krok 2: Wybór trybu (Środek ulicy czy Numer?) */}
+        {/* Wybór numeru */}
         <Route path="/select/:id" element={<SelectMode />} />
         
-        {/* Krok 3: Mapa (Parametr :point to "center" lub konkretny numer) */}
+        {/* Szczegóły i Zgłaszanie */}
         <Route path="/details/:id/:point" element={<Details />} />
+        
+        {/* Panel Operatora (dostępny też dla Audytora) */}
+        <Route path="/reports" element={<Reports />} />
+        
+        {/* Panel Audytora (tylko dla Audytora) */}
+        <Route path="/audit" element={<Audit />} />
       </Routes>
     </Router>
   );

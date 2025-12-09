@@ -1,23 +1,82 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import './App.css';
 
 function Home() {
   const [locations, setLocations] = useState([]);
   
-  // Stany dla wyszukiwania
+  // Stany wyszukiwania
   const [searchCity, setSearchCity] = useState('');   
   const [searchTerm, setSearchTerm] = useState('');   
-  
   const [sortBy, setSortBy] = useState('miejscowosc');
   const [loading, setLoading] = useState(false);
 
-  // Funkcja pobierająca dane z bazy (Wyszukiwarka)
+  // --- LOGOWANIE ---
+  const [userRole, setUserRole] = useState(localStorage.getItem('user_role') || 'guest');
+  const navigate = useNavigate();
+
+  // Stany do Modala Logowania
+  const [showLogin, setShowLogin] = useState(false);
+  const [targetRole, setTargetRole] = useState(''); // 'audytor' lub 'operator'
+  const [loginForm, setLoginForm] = useState({ login: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+
+  // 1. Kliknięcie w przycisk "Zaloguj"
+  const initiateLogin = (role) => {
+    setTargetRole(role);
+    setLoginForm({ login: '', password: '' });
+    setLoginError('');
+    setShowLogin(true);
+  };
+
+  // 2. Zatwierdzenie formularza
+  const handleLoginSubmit = (e) => {
+    e.preventDefault();
+
+    const { login, password } = loginForm;
+
+    if (targetRole === 'audytor') {
+        // --- DANE DLA AUDYTORA ---
+        if (login === 'Audytor' && password === 'Inżynierka2025') {
+            finalizeLogin('audytor');
+        } else {
+            setLoginError('Błędny login lub hasło Audytora!');
+        }
+    } 
+    else if (targetRole === 'operator') {
+        // --- DANE DLA OPERATORA ---
+        if (login === 'operator' && password === 'operator') {
+            finalizeLogin('operator');
+        } else {
+            setLoginError('Błędne dane (spróbuj: operator / operator)');
+        }
+    }
+  };
+
+  const finalizeLogin = (role) => {
+    localStorage.setItem('user_role', role);
+    setUserRole(role);
+    setShowLogin(false);
+    alert(`Pomyślnie zalogowano jako: ${role.toUpperCase()}`);
+  };
+
+  const handleLogout = () => {
+    if (window.confirm("Czy na pewno chcesz się wylogować?")) {
+        localStorage.removeItem('user_role');
+        setUserRole('guest');
+    }
+  };
+
+  // -----------------
+
   const fetchLocations = async (city, street, sortMethod) => {
     setLoading(true);
     try {
-      let query = supabase.from('lokalizacje').select('id, wojewodztwo, miejscowosc, ulica');
+      // Pobieramy tylko te, które NIE są usunięte
+      let query = supabase.from('lokalizacje')
+        .select('id, wojewodztwo, miejscowosc, ulica')
+        .eq('czy_usuniety', false);
 
       if (city.length > 0) query = query.ilike('miejscowosc', `%${city}%`);
       if (street.length > 0) query = query.ilike('ulica', `%${street}%`);
@@ -32,38 +91,21 @@ function Home() {
 
       query = query.limit(50);
       const { data, error } = await query;
-      
-      if (error) console.error("Błąd pobierania:", error);
-      else setLocations(data || []);
-      
-    } catch (err) {
-      console.error("Błąd krytyczny:", err);
-    } finally {
-      setLoading(false);
-    }
+      if (!error) setLocations(data || []);
+    } catch (err) { console.error(err); } 
+    finally { setLoading(false); }
   };
 
-  // NOWE: Funkcja pobierania ZBIORCZEGO raportu z LocalStorage (z linkiem do mapy)
   const handleDownloadReport = () => {
-    // 1. Pobierz dane z pamięci przeglądarki
     const savedData = JSON.parse(localStorage.getItem('my_report') || '[]');
+    if (savedData.length === 0) { alert("Twój raport jest pusty!"); return; }
 
-    if (savedData.length === 0) {
-      alert("Twój raport jest pusty! Dodaj najpierw jakieś punkty.");
-      return;
-    }
-
-    // 2. Generuj CSV z nagłówkami
     const headers = "Województwo;Miejscowość;Ulica;Numer;Kod Pocztowy;Wysokość;Współrzędne;Link do Mapy;Data Dodania\n";
-    
-    // Mapujemy dane do wierszy CSV
     const rows = savedData.map(item => 
       `${item.wojewodztwo};${item.miejscowosc};${item.ulica};${item.numer};${item.kod};${item.wysokosc || 'Brak'};${item.wspolrzedne};${item.link_mapy || ''};${item.data_dodania}`
     ).join("\n");
 
     const csvContent = "\uFEFF" + headers + rows;
-
-    // 3. Pobierz plik
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -74,15 +116,13 @@ function Home() {
     document.body.removeChild(link);
   };
 
-  // Funkcja czyszczenia raportu
   const handleClearReport = () => {
-    if (window.confirm("Czy na pewno chcesz usunąć wszystkie zapisane punkty z raportu?")) {
+    if (window.confirm("Czy na pewno chcesz usunąć wszystkie punkty z raportu?")) {
       localStorage.removeItem('my_report');
       alert("Raport wyczyszczony.");
     }
   };
 
-  // Live Search
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       fetchLocations(searchCity, searchTerm, sortBy);
@@ -92,10 +132,89 @@ function Home() {
 
   return (
     <div className="App">
+      
+      {/* --- MODAL LOGOWANIA --- */}
+      {showLogin && (
+          <div className="login-modal-overlay">
+              <div className="login-modal">
+                  <h2>Logowanie: {targetRole.toUpperCase()}</h2>
+                  <p>Wprowadź dane uwierzytelniające</p>
+                  
+                  <form onSubmit={handleLoginSubmit}>
+                      <input 
+                        type="text" 
+                        placeholder="Login" 
+                        value={loginForm.login}
+                        onChange={(e) => setLoginForm({...loginForm, login: e.target.value})}
+                        autoFocus
+                      />
+                      <input 
+                        type="password" 
+                        placeholder="Hasło" 
+                        value={loginForm.password}
+                        onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                      />
+                      
+                      {loginError && <div className="login-error">{loginError}</div>}
+
+                      <div className="login-buttons">
+                          <button type="submit" className="btn-confirm-login">Zaloguj</button>
+                          <button type="button" onClick={() => setShowLogin(false)} className="btn-cancel-login">Anuluj</button>
+                      </div>
+                  </form>
+              </div>
+          </div>
+      )}
+
       <header className="app-header">
+        
+        {/* --- GÓRNY PASEK NAWIGACJI --- */}
+        <div className="top-nav-bar">
+            {/* LEWA STRONA: Logowanie */}
+            <div className="nav-left">
+                {userRole === 'guest' ? (
+                    <>
+                        <button onClick={() => initiateLogin('audytor')} className="btn-role btn-auditor">
+                           🔐 Zaloguj: Audytor
+                        </button>
+                        <button onClick={() => initiateLogin('operator')} className="btn-role btn-operator">
+                           🛠️ Zaloguj: Operator
+                        </button>
+                    </>
+                ) : (
+                    <div className="user-info">
+                        Zalogowano: <strong>{userRole.toUpperCase()}</strong>
+                        <button onClick={handleLogout} className="btn-logout">Wyloguj</button>
+                    </div>
+                )}
+            </div>
+
+            {/* PRAWA STRONA: Przyciski po zalogowaniu */}
+            <div className="nav-right">
+                
+                {/* Dla Operatora */}
+                {userRole === 'operator' && (
+                    <button onClick={() => navigate('/reports')} className="btn-reports-nav">
+                        ⚠️ Zgłoszenia Użytkowników
+                    </button>
+                )}
+
+                {/* Dla Audytora */}
+                {userRole === 'audytor' && (
+                    <div style={{display: 'flex', gap: '10px'}}>
+                        <button onClick={() => navigate('/audit')} className="btn-audit-nav">
+                             🔐 Panel Audytora
+                        </button>
+                        <button onClick={() => navigate('/reports')} className="btn-reports-nav" style={{backgroundColor: '#f39c12'}}>
+                            ⚠️ Zgłoszenia
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+
         <h1>Wyszukiwarka Ulic TERYT</h1>
         
-        {/* Panel Raportu w nagłówku */}
         <div className="report-panel">
            <button onClick={handleDownloadReport} className="btn-main-download">
              📂 Pobierz Zapisany Raport
@@ -106,7 +225,6 @@ function Home() {
         </div>
       </header>
 
-      {/* Pasek Wyszukiwania */}
       <div className="search-bar-container">
         <input 
           type="text" 

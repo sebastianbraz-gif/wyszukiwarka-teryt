@@ -26,52 +26,31 @@ function SelectMode() {
     setOsmNumbers([]);
     setDebugInfo('');
     
-    // 1. Czyszczenie nazwy ulicy
+    // 1. Logika słów kluczowych
     let rawName = streetInfo.ulica
       .replace(/ul\.|al\.|pl\.|skwer|rondo|gen\.|sw\.|ks\./gi, '') 
       .replace(/[^a-zA-Z0-9żźćńółęąśŻŹĆŃÓŁĘĄŚ ]/g, '') 
       .trim();
 
-    // 2. Wybieramy najdłuższe słowo kluczowe
     const words = rawName.split(/\s+/).filter(w => w.length > 2);
     let keyword = words.reduce((a, b) => a.length >= b.length ? a : b, "");
     if (!keyword) keyword = rawName;
 
     const city = streetInfo.miejscowosc;
     const isVillageStyle = keyword.toLowerCase() === city.toLowerCase() || streetInfo.ulica.includes(city);
-
     const logMsg = `Szukam obszaru: "${city}", ulica zawiera: "${keyword}"`;
     setDebugInfo(logMsg);
 
-    // 3. Zapytanie do OSM (Area Search)
+    // 2. Zapytanie OSM
     let query = '';
-    
     if (isVillageStyle) {
-      // Dla wsi bez ulic
-      query = `
-        [out:json][timeout:25];
-        area["name"="${city}"]->.searchArea;
-        (
-          node(area.searchArea)["addr:housenumber"];
-          way(area.searchArea)["addr:housenumber"];
-        );
-        out body;
-      `;
+      query = `[out:json][timeout:25]; area["name"="${city}"]->.searchArea; ( node(area.searchArea)["addr:housenumber"]; way(area.searchArea)["addr:housenumber"]; ); out body;`;
     } else {
-      // Dla miast z ulicami
-      query = `
-        [out:json][timeout:25];
-        area["name"="${city}"]->.searchArea;
-        (
-          node(area.searchArea)["addr:street"~"${keyword}",i]["addr:housenumber"];
-          way(area.searchArea)["addr:street"~"${keyword}",i]["addr:housenumber"];
-          relation(area.searchArea)["addr:street"~"${keyword}",i]["addr:housenumber"];
-        );
-        out body;
-      `;
+      query = `[out:json][timeout:25]; area["name"="${city}"]->.searchArea; ( node(area.searchArea)["addr:street"~"${keyword}",i]["addr:housenumber"]; way(area.searchArea)["addr:street"~"${keyword}",i]["addr:housenumber"]; relation(area.searchArea)["addr:street"~"${keyword}",i]["addr:housenumber"]; ); out body;`;
     }
 
     try {
+      // A. POBIERAMY Z MAPY
       const res = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`);
       const data = await res.json();
       
@@ -85,8 +64,33 @@ function SelectMode() {
         });
       }
 
-      // Sortowanie numeryczne
-      const sortedNums = Array.from(nums).sort((a, b) => 
+      // B. POBIERAMY USUNIĘTE Z SUPABASE
+      const { data: deletedData } = await supabase
+        .from('adresy')
+        .select('numer_domu')
+        .eq('lokalizacja_id', id)
+        .eq('czy_usuniety', true);
+      
+      console.log("Znalezione usunięte w bazie:", deletedData);
+
+      // Funkcja pomocnicza: usuwa spacje i zmienia na małe litery
+      const normalize = (val) => String(val).toLowerCase().replace(/\s/g, '');
+
+      // Tworzymy zbiór znormalizowanych "zakazanych" numerów
+      const deletedSet = new Set(
+          deletedData ? deletedData.map(d => normalize(d.numer_domu)) : []
+      );
+
+      // C. FILTRUJEMY
+      const validNums = Array.from(nums).filter(num => {
+          const normNum = normalize(num);
+          const isDeleted = deletedSet.has(normNum);
+          if (isDeleted) console.log(`Ukrywam usunięty numer: ${num}`);
+          return !isDeleted;
+      });
+
+      // D. Sortowanie
+      const sortedNums = validNums.sort((a, b) => 
         a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
       );
 
@@ -139,7 +143,7 @@ function SelectMode() {
               
               {hasSearched && !loadingOsm && (
                 <div style={{marginTop: '20px'}}>
-                  <p style={{ color: '#e74c3c' }}>Nie znaleziono numerów w bazie OpenStreetMap.</p>
+                  <p style={{ color: '#e74c3c' }}>Nie znaleziono numerów (lub zostały usunięte).</p>
                   <p style={{ fontSize: '0.8em', color: '#999' }}>Diagnostyka: {debugInfo}</p>
                 </div>
               )}
@@ -170,7 +174,8 @@ function SelectMode() {
         </div>
         
         <div style={{marginTop: '40px'}}>
-           <Link to="/" style={{color: '#999', textDecoration: 'none', fontSize: '0.9em'}}>🠔 Wróć do listy ulic</Link>
+           {/* ZMIANA: color ustawiony na black */}
+           <Link to="/" style={{color: 'black', textDecoration: 'none', fontSize: '0.9em'}}>🠔 Wróć do listy ulic</Link>
         </div>
       </div>
     </div>
