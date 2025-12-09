@@ -5,8 +5,13 @@ import './App.css';
 
 function Details() {
   const { id, point } = useParams();
+  
   const [location, setLocation] = useState(null);
+  
+  // Dane dynamiczne
   const [coords, setCoords] = useState(null);
+  const [postalCode, setPostalCode] = useState(null); // NOWE: Stan na kod pocztowy
+
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
@@ -26,25 +31,30 @@ function Details() {
       }
       setLocation(streetData);
 
-      // 2. SPRAWDZANIE PAMIĘCI
+      // 2. SPRAWDZANIE PAMIĘCI (CACHE)
       if (point === 'center') {
-        // Czy w bazie jest już geom?
+        // Środek ulicy
         if (streetData.geom) {
           console.log("Mamy to w bazie (środek):", streetData.geom);
           setCoords(streetData.geom);
         }
+        // NOWE: Czy mamy kod pocztowy w bazie?
+        if (streetData.kod_pocztowy) {
+           setPostalCode(streetData.kod_pocztowy);
+        }
+
       } else {
-        // Czy w bazie adresów jest ten numer?
+        // Konkretny numer
         const { data: addressData } = await supabase
           .from('adresy')
-          .select('geom')
+          .select('geom, kod_pocztowy') // NOWE: Pobieramy też kod
           .eq('lokalizacja_id', id)
           .eq('numer_domu', point)
           .single();
 
-        if (addressData && addressData.geom) {
-          console.log("Mamy to w bazie (numer):", addressData.geom);
-          setCoords(addressData.geom);
+        if (addressData) {
+          if (addressData.geom) setCoords(addressData.geom);
+          if (addressData.kod_pocztowy) setPostalCode(addressData.kod_pocztowy);
         }
       }
       setLoading(false);
@@ -66,34 +76,60 @@ function Details() {
     }
     
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+      // NOWE: Dodałem &addressdetails=1 aby dostać kod pocztowy
+      const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}`;
+      
+      const res = await fetch(url);
       const data = await res.json();
 
       if (data && data.length > 0) {
         const resultCoords = `${data[0].lat}, ${data[0].lon}`;
         
+        // NOWE: Wyciągamy kod pocztowy z odpowiedzi API
+        // Czasami API zwraca 'postcode', upewniamy się że istnieje
+        const resultPostCode = data[0].address?.postcode || null;
+
+        if (resultPostCode) {
+            console.log("Znaleziono kod pocztowy:", resultPostCode);
+        }
+        
         // --- ZAPISUJEMY I SPRAWDZAMY BŁĘDY ---
         
         if (point === 'center') {
           // Zapis do LOKALIZACJE
+          const updateData = { 
+              geom: resultCoords, 
+              status: 'zgeokodowane', 
+              jakosc: 100 
+          };
+          // Dodajemy kod pocztowy do zapisu tylko jeśli API go zwróciło
+          if (resultPostCode) updateData.kod_pocztowy = resultPostCode;
+
           const { error } = await supabase
             .from('lokalizacje')
-            .update({ geom: resultCoords, status: 'zgeokodowane', jakosc: 100 })
+            .update(updateData)
             .eq('id', id);
 
           if (error) {
             alert("Błąd zapisu do bazy! " + error.message);
-            console.error(error);
           } else {
-            setCoords(resultCoords); // Ustawiamy tylko jeśli zapis się udał (lub przeszedł bez błędu)
+            setCoords(resultCoords);
+            if (resultPostCode) setPostalCode(resultPostCode);
           }
 
         } else {
           // Zapis do ADRESY
+          const upsertData = { 
+              lokalizacja_id: id, 
+              numer_domu: point, 
+              geom: resultCoords 
+          };
+          if (resultPostCode) upsertData.kod_pocztowy = resultPostCode;
+
           const { error } = await supabase
             .from('adresy')
             .upsert(
-              { lokalizacja_id: id, numer_domu: point, geom: resultCoords }, 
+              upsertData, 
               { onConflict: 'lokalizacja_id, numer_domu' }
             );
             
@@ -101,6 +137,7 @@ function Details() {
             alert("Błąd zapisu adresu! " + error.message);
           } else {
             setCoords(resultCoords);
+            if (resultPostCode) setPostalCode(resultPostCode);
           }
         }
       } else {
@@ -124,6 +161,7 @@ function Details() {
           {location.ulica} {point !== 'center' ? point : ''}
         </h1>
         <span className="header-subinfo">{location.miejscowosc}</span>
+        
         <div style={{ marginTop: '10px', fontSize: '0.9em', background: 'rgba(255,255,255,0.1)', padding: '5px 15px', borderRadius: '20px' }}>
            Dokładność: {point === 'center' ? 'Środek Ulicy' : 'Konkretny Budynek'}
         </div>
@@ -134,8 +172,18 @@ function Details() {
            🠔 Wróć do wyboru
         </Link>
 
+        {/* --- SEKCJA WYNIKÓW --- */}
         <div style={{ margin: '30px 0', textAlign: 'center' }}>
-          <strong style={{ display: 'block', marginBottom: '10px', color: '#555' }}>
+          
+          {/* Wyświetlanie kodu pocztowego */}
+          {postalCode && (
+              <div className="postal-badge-container">
+                  <span className="postal-label">Kod Pocztowy:</span>
+                  <span className="postal-value">{postalCode}</span>
+              </div>
+          )}
+
+          <strong style={{ display: 'block', marginBottom: '10px', color: '#555', marginTop: '20px' }}>
             Współrzędne GPS {point !== 'center' && `(numer ${point})`}:
           </strong>
           
@@ -157,7 +205,7 @@ function Details() {
            </a>
         ) : (
           <button className="btn-search" onClick={handleGeocode} disabled={processing}>
-            {processing ? 'Pobieranie...' : `📍 Pobierz pozycję`}
+            {processing ? 'Pobieranie...' : `📍 Pobierz pozycję i Kod Pocztowy`}
           </button>
         )}
       </div>
