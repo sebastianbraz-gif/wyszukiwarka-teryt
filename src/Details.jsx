@@ -23,24 +23,32 @@ function Details() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   
-  // ODCZYT ROLI Z CIASTECZKA
+  // Rola i Edycja
   const [userRole, setUserRole] = useState(getCookie('user_role') || 'guest');
   const [isEditing, setIsEditing] = useState(false);
   const [newPostal, setNewPostal] = useState('');
   const [currentRecordInfo, setCurrentRecordInfo] = useState({ table: '', id: null });
   
+  // Zgłoszenia błędów
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportType, setReportType] = useState('kod');
   const [reportNote, setReportNote] = useState('');
 
-  // 1. Pobieranie danych z bazy
+  // --- NOTATKI ---
+  const [notes, setNotes] = useState([]);
+  const [showNoteInput, setShowNoteInput] = useState(false);
+  const [newNoteText, setNewNoteText] = useState('');
+
+  // 1. Pobieranie danych
   useEffect(() => {
     async function getData() {
+      // Pobierz lokalizację
       const { data: streetData, error } = await supabase.from('lokalizacje').select('*').eq('id', id).single();
       if (error || !streetData) { setLoading(false); return; }
       if (streetData.czy_usuniety) { alert("Lokalizacja usunięta."); navigate('/'); return; }
       setLocation(streetData);
 
+      // Ustal punkt (center lub numer)
       if (point === 'center') {
         if (streetData.geom) setCoords(streetData.geom);
         if (streetData.kod_pocztowy) setPostalCode(streetData.kod_pocztowy);
@@ -54,22 +62,29 @@ function Details() {
           setCurrentRecordInfo({ table: 'adresy', id: addressData.id });
         }
       }
+
+      // Pobierz NOTATKI
+      const { data: notesData } = await supabase
+        .from('notatki')
+        .select('*')
+        .eq('lokalizacja_id', id)
+        .eq('numer_domu', point)
+        .order('data_dodania', { ascending: false });
+      
+      setNotes(notesData || []);
       setLoading(false);
     }
     getData();
   }, [id, point, navigate]);
 
-  // 2. Pobieranie wysokości
+  // 2. Wysokość
   useEffect(() => {
     if (!coords) return;
     const [lat, lon] = coords.split(',').map(x => x.trim());
-    
     fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`)
       .then(res => res.json())
       .then(data => { 
-          if(data.elevation && data.elevation.length > 0) {
-              setElevation(data.elevation[0].toFixed(1)); 
-          }
+          if(data.elevation && data.elevation.length > 0) setElevation(data.elevation[0].toFixed(1)); 
       })
       .catch(err => console.error("Błąd wysokości:", err));
   }, [coords]);
@@ -94,12 +109,8 @@ function Details() {
           await supabase.from('lokalizacje').update({ geom: resultCoords, kod_pocztowy: resultPostCode }).eq('id', id);
         } else {
           const { data: newAddr } = await supabase.from('adresy').upsert({ 
-              lokalizacja_id: id, 
-              numer_domu: point, 
-              geom: resultCoords, 
-              kod_pocztowy: resultPostCode 
+              lokalizacja_id: id, numer_domu: point, geom: resultCoords, kod_pocztowy: resultPostCode 
           }, { onConflict: 'lokalizacja_id, numer_domu' }).select().single();
-          
           if (newAddr) setCurrentRecordInfo({ table: 'adresy', id: newAddr.id });
         }
         setCoords(resultCoords); 
@@ -116,12 +127,9 @@ function Details() {
       const { error } = await supabase.from(currentRecordInfo.table).update({ kod_pocztowy: newPostal }).eq('id', currentRecordInfo.id);
       if (!error) {
           await supabase.from('logi_systemowe').insert([{ 
-              rola: userRole, 
-              akcja: 'zmiana_kodu', 
+              rola: userRole, akcja: 'zmiana_kodu', 
               opis_szczegolowy: `Zmiana kodu z ${postalCode} na ${newPostal}`, 
-              tabela: currentRecordInfo.table, 
-              rekord_id: currentRecordInfo.id, 
-              poprzednie_dane: { kod_pocztowy: postalCode } 
+              tabela: currentRecordInfo.table, rekord_id: currentRecordInfo.id, poprzednie_dane: { kod_pocztowy: postalCode } 
           }]);
           setPostalCode(newPostal); setIsEditing(false); alert("Zapisano!");
       }
@@ -144,6 +152,27 @@ function Details() {
       const desc = reportType === 'kod' ? `[BŁĄD KODU] Sugerowany: ${reportNote}` : `[ADRES NIE ISTNIEJE]`;
       await supabase.from('zgloszenia').insert([{ lokalizacja_id: id, numer_domu: point, opis: desc, status: 'oczekujace' }]);
       alert("Wysłano zgłoszenie!"); setShowReportModal(false);
+  };
+
+  // --- FUNKCJA ZGŁASZANIA NOTATKI ---
+  const handleSuggestNote = async () => {
+    if (!newNoteText.trim()) return;
+    const desc = `[NOTATKA] ${newNoteText}`; // Specjalny prefiks
+    
+    const { error } = await supabase.from('zgloszenia').insert([{ 
+        lokalizacja_id: id, 
+        numer_domu: point, 
+        opis: desc, 
+        status: 'oczekujace' 
+    }]);
+
+    if (!error) {
+        alert("Notatka wysłana do weryfikacji!");
+        setNewNoteText('');
+        setShowNoteInput(false);
+    } else {
+        alert("Błąd: " + error.message);
+    }
   };
 
   const getLatLon = () => {
@@ -187,7 +216,6 @@ function Details() {
         <Link to={`/select/${id}`} style={{color:'black', display:'block', marginBottom:'20px'}}>🠔 Wróć do wyboru</Link>
 
         <div className="data-grid">
-            
             <div className="data-card info-section">
                 <div className="info-row">
                     <span className="label">Kod Pocztowy:</span>
@@ -208,16 +236,11 @@ function Details() {
                 <div className="info-row" style={{marginTop:'15px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
                     <span className="label">Wysokość:</span>
                     <div className="value-box">
-                        {elevation ? (
-                            <strong style={{color:'#2980b9'}}>{elevation} m n.p.m.</strong>
-                        ) : (
-                            <span style={{color:'#999'}}>Brak danych</span>
-                        )}
+                        {elevation ? <strong style={{color:'#2980b9'}}>{elevation} m n.p.m.</strong> : <span style={{color:'#999'}}>Brak danych</span>}
                     </div>
                 </div>
             </div>
 
-            {/* KARTA WSPÓŁRZĘDNYCH */}
             <div className="data-card coords-section">
                 <div className="coords-header">Współrzędne Geograficzne</div>
                 {coords ? (
@@ -235,7 +258,6 @@ function Details() {
                     <div className="no-coords">Brak danych GPS<br/>Kliknij "Pobierz dane"</div>
                 )}
             </div>
-
         </div>
 
         <div className="action-buttons">
@@ -252,9 +274,46 @@ function Details() {
             )}
         </div>
 
-        <div style={{marginTop:'40px'}}>
+        <div style={{marginTop:'30px'}}>
             <button onClick={openReportModal} className="btn-report-error">📢 Zgłoś błąd tego adresu</button>
         </div>
+
+        {/* --- SEKCJA NOTATEK (Tutaj dodano zmiany) --- */}
+        <div className="notes-container" style={{marginTop: '40px', borderTop: '2px dashed #ddd', paddingTop: '20px'}}>
+            <h3 style={{color: '#f39c12'}}>📝 Notatki Społeczności</h3>
+            
+            {notes.length === 0 ? (
+                <p style={{color: '#999', fontStyle: 'italic'}}>Brak notatek. Wiesz coś ciekawego? Dodaj!</p>
+            ) : (
+                <div className="notes-list">
+                    {notes.map(note => (
+                        <div key={note.id} className="note-card">
+                            <p className="note-content">"{note.tresc}"</p>
+                            <span className="note-meta">Dodano: {new Date(note.data_dodania).toLocaleDateString()}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {!showNoteInput ? (
+                <button onClick={() => setShowNoteInput(true)} className="btn-suggest-note">
+                    ➕ Dodaj informację (np. kod domofonu, firma)
+                </button>
+            ) : (
+                <div className="note-input-box">
+                    <textarea 
+                        placeholder="Np. Kod do klatki 1 to 1234, na parterze jest Żabka..."
+                        value={newNoteText}
+                        onChange={(e) => setNewNoteText(e.target.value)}
+                    />
+                    <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
+                        <button onClick={handleSuggestNote} className="btn-confirm-login" style={{fontSize: '0.9em'}}>Wyślij do zatwierdzenia</button>
+                        <button onClick={() => setShowNoteInput(false)} className="btn-cancel-login" style={{fontSize: '0.9em'}}>Anuluj</button>
+                    </div>
+                </div>
+            )}
+        </div>
+
       </div>
     </div>
   );

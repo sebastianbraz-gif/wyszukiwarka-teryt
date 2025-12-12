@@ -1,4 +1,4 @@
-/* App.css - Wersja Finalna */
+/* App.css - Wersja Kompletna (Z notatkami i zakładkami) */
 
 /* --- BAZA I UKŁAD --- */
 .App {
@@ -375,3 +375,119 @@ table th, table td {
 /* ANIMACJE */
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+/* --- NOWE STYLE DLA NOTATEK --- */
+.notes-container {
+    text-align: left;
+    width: 100%;
+}
+
+.notes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.note-card {
+    background-color: #fffde7; /* Jasny żółty karteczki */
+    border-left: 5px solid #f1c40f;
+    padding: 15px;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.note-content {
+    margin: 0 0 5px 0;
+    font-size: 1.1em;
+    color: #444;
+    font-style: italic;
+}
+
+.note-meta {
+    font-size: 0.8em;
+    color: #999;
+    display: block;
+    text-align: right;
+}
+
+.btn-suggest-note {
+    background-color: transparent;
+    border: 2px dashed #bdc3c7;
+    color: #7f8c8d;
+    padding: 10px;
+    width: 100%;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.2s;
+}
+
+.btn-suggest-note:hover {
+    border-color: #f39c12;
+    color: #f39c12;
+    background-color: #fffcf5;
+}
+
+.note-input-box textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-family: inherit;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+/* --- ZAKŁADKI W PANELU OPERATORA --- */
+.tabs-container {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+}
+
+.tab-btn {
+    padding: 10px 20px;
+    font-size: 1rem;
+    font-weight: bold;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    background-color: #e0e0e0;
+    color: #7f8c8d;
+    transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+    transform: translateY(-2px);
+    opacity: 0.9;
+}
+
+.tab-btn.active-error {
+    background-color: #c0392b;
+    color: white;
+    box-shadow: 0 4px 10px rgba(192, 57, 43, 0.3);
+}
+
+.tab-btn.active-note {
+    background-color: #f39c12;
+    color: white;
+    box-shadow: 0 4px 10px rgba(243, 156, 18, 0.3);
+}
+
+.empty-msg {
+    padding: 30px;
+    color: #27ae60;
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.action-row {
+    display: flex; 
+    gap: 5px; 
+    justify-content: center;
+}
