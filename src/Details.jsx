@@ -39,6 +39,14 @@ function Details() {
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [newNoteText, setNewNoteText] = useState('');
 
+  // --- NOWA FUNKCJA: NAPRAWA LINKÓW GOOGLE MAPS ---
+  const getGoogleMapsLink = (query) => {
+    if (!query) return '#';
+    // encodeURIComponent zamienia spacje na %20 i polskie znaki na kod bezpieczny dla URL
+    // Używamy uniwersalnego formatu Google Maps
+    return `https://www.google.com/maps?q=${encodeURIComponent(query)}`;
+  };
+
   // 1. Pobieranie danych
   useEffect(() => {
     async function getData() {
@@ -132,32 +140,39 @@ function Details() {
       }
   };
 
+  // --- POPRAWIONE POBIERANIE CSV ---
   const handleDownloadSingle = () => {
       if (!location || !coords) return;
-      const link = document.createElement('a'); link.href = `data:text/csv;charset=utf-8,\uFEFFAdres;${location.ulica} ${point}\nWspółrzędne;${coords}\nLink;http://googleusercontent.com/maps.google.com/?q=${coords.replace(' ', '')}`; link.download = 'dane.csv'; link.click();
+      // Używamy nowej funkcji do generowania bezpiecznego linku
+      const safeLink = getGoogleMapsLink(coords);
+      
+      const link = document.createElement('a'); 
+      link.href = `data:text/csv;charset=utf-8,\uFEFFAdres;${location.ulica} ${point}\nWspółrzędne;${coords}\nLink;${safeLink}`; 
+      link.download = 'dane.csv'; 
+      link.click();
   };
 
-  // --- POPRAWIONA FUNKCJA ZAPISU DO RAPORTU ---
+  // --- POPRAWIONE DODAWANIE DO RAPORTU ---
   const handleAddToReport = () => {
     const report = JSON.parse(localStorage.getItem('my_report') || '[]');
     
-    // Teraz zapisujemy komplet danych
     const newItem = { 
         id: `${id}-${point}`, 
-        wojewodztwo: location.wojewodztwo, // DODANO
-        miejscowosc: location.miejscowosc, // DODANO
+        wojewodztwo: location.wojewodztwo, 
+        miejscowosc: location.miejscowosc, 
         ulica: location.ulica, 
         numer: point, 
         kod: postalCode, 
-        wysokosc: elevation ? `${elevation} m` : '-', // DODANO
+        wysokosc: elevation ? `${elevation} m` : '-', 
         coords: coords, 
-        link: `http://googleusercontent.com/maps.google.com/?q=${coords ? coords.replace(' ', '') : ''}`, 
+        // Używamy nowej funkcji do linku
+        link: getGoogleMapsLink(coords), 
         data: new Date().toLocaleString() 
     };
 
     report.push(newItem);
     localStorage.setItem('my_report', JSON.stringify(report)); 
-    alert("Dodano do raportu (z kompletem danych)!");
+    alert("Dodano do raportu (z poprawnym linkiem)!");
   };
 
   const openReportModal = () => { setReportType('kod'); setReportNote(''); setShowReportModal(true); };
@@ -241,7 +256,15 @@ function Details() {
         <div className="action-buttons">
             {coords ? (
             <>
-                <a href={`http://googleusercontent.com/maps.google.com/?q=${coords.replace(' ', '')}`} target="_blank" rel="noreferrer" className="btn-search">Mapa Google 🗺️</a>
+                {/* TUTAJ JEST UŻYCIE FUNKCJI NAPRAWIAJĄCEJ LINK */}
+                <a 
+                    href={getGoogleMapsLink(coords)} 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className="btn-search"
+                >
+                    Mapa Google 🗺️
+                </a>
                 <button onClick={handleAddToReport} className="btn-add-report">+ Dodaj do raportu</button>
                 <button onClick={handleDownloadSingle} className="btn-download">Pobierz CSV 📥</button>
             </>
