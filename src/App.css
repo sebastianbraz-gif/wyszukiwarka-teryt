@@ -1,4 +1,4 @@
-/* App.css - Wersja Kompletna (Z notatkami i zakładkami) */
+/* App.css - Wersja Kompletna (Z podglądem raportu, notatkami i zakładkami) */
 
 /* --- BAZA I UKŁAD --- */
 .App {
@@ -390,7 +390,7 @@ table th, table td {
 }
 
 .note-card {
-    background-color: #fffde7; /* Jasny żółty karteczki */
+    background-color: #fffde7; 
     border-left: 5px solid #f1c40f;
     padding: 15px;
     border-radius: 4px;
@@ -490,4 +490,99 @@ table th, table td {
     display: flex; 
     gap: 5px; 
     justify-content: center;
+}
+
+/* --- STYLE DLA REPORT PREVIEW (NOWE) --- */
+.report-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.selection-info {
+    font-size: 1.1em;
+    color: #555;
+}
+
+.bulk-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+
+.btn-secondary {
+    background-color: #95a5a6;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.btn-delete-selection {
+    background-color: #c0392b;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.btn-download-final {
+    background-color: #27ae60;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.btn-download-final:disabled,
+.btn-delete-selection:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.preview-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.preview-table th {
+    background-color: #2c3e50;
+    color: white;
+    padding: 10px;
+    text-align: left;
+}
+
+.preview-table td {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    text-align: left;
+}
+
+.checkbox-cell {
+    text-align: center !important;
+}
+
+.checkbox-cell input {
+    transform: scale(1.5);
+    cursor: pointer;
+}
+
+.row-selected {
+    background-color: #e8f8f5; /* Delikatna zieleń */
+}
+
+.empty-state {
+    text-align: center;
+    padding: 50px;
+    color: #7f8c8d;
+    font-size: 1.2em;
 }

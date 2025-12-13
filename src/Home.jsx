@@ -3,9 +3,8 @@ import { supabase } from './supabaseClient';
 import { Link, useNavigate } from 'react-router-dom';
 import './App.css';
 
-// --- FUNKCJE POMOCNICZE DO CIASTECZEK (SESJA PRZEGLĄDARKI) ---
+// --- HELPERY COOKIES ---
 const setSessionCookie = (name, value) => {
-  // Brak 'expires' oznacza, że ciastko żyje do zamknięcia przeglądarki
   document.cookie = `${name}=${value}; path=/; SameSite=Lax`;
 };
 const getCookie = (name) => {
@@ -17,7 +16,7 @@ const getCookie = (name) => {
 const deleteCookie = (name) => {
   document.cookie = `${name}=; path=/; max-age=0`;
 };
-// -------------------------------------------------------------
+// -----------------------
 
 function Home() {
   const [locations, setLocations] = useState([]);
@@ -51,7 +50,6 @@ function Home() {
   };
 
   const finalizeLogin = (role) => {
-    // ZAPIS DO CIASTECZKA SESYJNEGO
     setSessionCookie('user_role', role);
     setUserRole(role); 
     setShowLogin(false);
@@ -60,7 +58,6 @@ function Home() {
 
   const handleLogout = () => {
     if (window.confirm("Wylogować?")) { 
-        // USUNIĘCIE CIASTECZKA
         deleteCookie('user_role');
         setUserRole('guest'); 
     }
@@ -83,13 +80,15 @@ function Home() {
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
-  const handleDownloadReport = () => {
+  // --- ZMIANA: PRZEKIEROWANIE DO PODGLĄDU ---
+  const handleGoToReportPreview = () => {
     const savedData = JSON.parse(localStorage.getItem('my_report') || '[]');
-    if (savedData.length === 0) { alert("Pusty raport!"); return; }
-    const headers = "Województwo;Miejscowość;Ulica;Numer;Kod;Wysokość;Współrzędne;Link;Data\n";
-    const rows = savedData.map(item => `${item.wojewodztwo};${item.miejscowosc};${item.ulica};${item.numer};${item.kod};${item.wysokosc};${item.wspolrzedne};${item.link_mapy};${item.data_dodania}`).join("\n");
-    const blob = new Blob(["\uFEFF" + headers + rows], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `RAPORT.csv`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    if (savedData.length === 0) { 
+        alert("Pusty raport! Dodaj najpierw jakieś adresy."); 
+        return; 
+    }
+    // Zamiast pobierać, idziemy do nowej strony
+    navigate('/report-preview');
   };
 
   const handleClearReport = () => {
@@ -134,11 +133,13 @@ function Home() {
             </div>
         </div>
         <h1>Wyszukiwarka Ulic TERYT</h1>
-        <div className="report-panel"><button onClick={handleDownloadReport} className="btn-main-download">📂 Pobierz Raport</button><button onClick={handleClearReport} className="btn-clear">🗑️ Wyczyść</button></div>
+        <div className="report-panel">
+            {/* Zmieniono nazwę funkcji i tekst */}
+            <button onClick={handleGoToReportPreview} className="btn-main-download">📂 Twój Raport (Pobierz)</button>
+            <button onClick={handleClearReport} className="btn-clear">🗑️ Wyczyść</button>
+        </div>
       </header>
       
-      {/* USUNIĘTO SEKCJĘ AKTUALIZACJI TERYT Z TEGO MIEJSCA */}
-
       <div className="search-bar-container">
         <input type="text" placeholder="Miejscowość..." value={searchCity} onChange={(e) => setSearchCity(e.target.value)} className="live-search-input city-input" />
         <input type="text" placeholder="Nazwa ulicy..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="live-search-input street-input" />

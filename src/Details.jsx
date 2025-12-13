@@ -42,13 +42,11 @@ function Details() {
   // 1. Pobieranie danych
   useEffect(() => {
     async function getData() {
-      // Pobierz lokalizację
       const { data: streetData, error } = await supabase.from('lokalizacje').select('*').eq('id', id).single();
       if (error || !streetData) { setLoading(false); return; }
       if (streetData.czy_usuniety) { alert("Lokalizacja usunięta."); navigate('/'); return; }
       setLocation(streetData);
 
-      // Ustal punkt (center lub numer)
       if (point === 'center') {
         if (streetData.geom) setCoords(streetData.geom);
         if (streetData.kod_pocztowy) setPostalCode(streetData.kod_pocztowy);
@@ -63,7 +61,6 @@ function Details() {
         }
       }
 
-      // Pobierz NOTATKI
       const { data: notesData } = await supabase
         .from('notatki')
         .select('*')
@@ -137,15 +134,30 @@ function Details() {
 
   const handleDownloadSingle = () => {
       if (!location || !coords) return;
-      // POPRAWIONY LINK:
-      const link = document.createElement('a'); link.href = `data:text/csv;charset=utf-8,\uFEFFAdres;${location.ulica} ${point}\nWspółrzędne;${coords}\nLink;https://www.google.com/maps?q=${coords.replace(' ', '')}`; link.download = 'dane.csv'; link.click();
+      const link = document.createElement('a'); link.href = `data:text/csv;charset=utf-8,\uFEFFAdres;${location.ulica} ${point}\nWspółrzędne;${coords}\nLink;http://googleusercontent.com/maps.google.com/?q=${coords.replace(' ', '')}`; link.download = 'dane.csv'; link.click();
   };
 
+  // --- POPRAWIONA FUNKCJA ZAPISU DO RAPORTU ---
   const handleAddToReport = () => {
     const report = JSON.parse(localStorage.getItem('my_report') || '[]');
-    // POPRAWIONY LINK:
-    report.push({ id: `${id}-${point}`, ulica: location.ulica, numer: point, kod: postalCode, coords: coords, link: `https://www.google.com/maps?q=${coords.replace(' ', '')}`, data: new Date().toLocaleString() });
-    localStorage.setItem('my_report', JSON.stringify(report)); alert("Dodano do raportu!");
+    
+    // Teraz zapisujemy komplet danych
+    const newItem = { 
+        id: `${id}-${point}`, 
+        wojewodztwo: location.wojewodztwo, // DODANO
+        miejscowosc: location.miejscowosc, // DODANO
+        ulica: location.ulica, 
+        numer: point, 
+        kod: postalCode, 
+        wysokosc: elevation ? `${elevation} m` : '-', // DODANO
+        coords: coords, 
+        link: `http://googleusercontent.com/maps.google.com/?q=${coords ? coords.replace(' ', '') : ''}`, 
+        data: new Date().toLocaleString() 
+    };
+
+    report.push(newItem);
+    localStorage.setItem('my_report', JSON.stringify(report)); 
+    alert("Dodano do raportu (z kompletem danych)!");
   };
 
   const openReportModal = () => { setReportType('kod'); setReportNote(''); setShowReportModal(true); };
@@ -156,25 +168,11 @@ function Details() {
       alert("Wysłano zgłoszenie!"); setShowReportModal(false);
   };
 
-  // --- FUNKCJA ZGŁASZANIA NOTATKI ---
   const handleSuggestNote = async () => {
     if (!newNoteText.trim()) return;
     const desc = `[NOTATKA] ${newNoteText}`;
-    
-    const { error } = await supabase.from('zgloszenia').insert([{ 
-        lokalizacja_id: id, 
-        numer_domu: point, 
-        opis: desc, 
-        status: 'oczekujace' 
-    }]);
-
-    if (!error) {
-        alert("Notatka wysłana do weryfikacji!");
-        setNewNoteText('');
-        setShowNoteInput(false);
-    } else {
-        alert("Błąd: " + error.message);
-    }
+    const { error } = await supabase.from('zgloszenia').insert([{ lokalizacja_id: id, numer_domu: point, opis: desc, status: 'oczekujace' }]);
+    if (!error) { alert("Notatka wysłana do weryfikacji!"); setNewNoteText(''); setShowNoteInput(false); } else { alert("Błąd: " + error.message); }
   };
 
   const getLatLon = () => {
@@ -193,14 +191,8 @@ function Details() {
               <div className="login-modal">
                   <h2>Co się nie zgadza?</h2>
                   <div className="report-options">
-                      <label className={`report-card ${reportType === 'kod' ? 'selected' : ''}`} onClick={() => setReportType('kod')}>
-                          <input type="radio" name="rtype" checked={reportType === 'kod'} onChange={() => setReportType('kod')} /> 
-                          <span className="report-text">Błędny Kod Pocztowy</span>
-                      </label>
-                      <label className={`report-card ${reportType === 'brak' ? 'selected-danger' : ''}`} onClick={() => setReportType('brak')}>
-                          <input type="radio" name="rtype" checked={reportType === 'brak'} onChange={() => setReportType('brak')} /> 
-                          <span className="report-text danger">Ten adres nie istnieje</span>
-                      </label>
+                      <label className={`report-card ${reportType === 'kod' ? 'selected' : ''}`} onClick={() => setReportType('kod')}><input type="radio" name="rtype" checked={reportType === 'kod'} onChange={() => setReportType('kod')} /> <span className="report-text">Błędny Kod Pocztowy</span></label>
+                      <label className={`report-card ${reportType === 'brak' ? 'selected-danger' : ''}`} onClick={() => setReportType('brak')}><input type="radio" name="rtype" checked={reportType === 'brak'} onChange={() => setReportType('brak')} /> <span className="report-text danger">Ten adres nie istnieje</span></label>
                   </div>
                   {reportType === 'kod' && <input type="text" placeholder="Podaj poprawny kod" value={reportNote} onChange={(e) => setReportNote(e.target.value)} autoFocus />}
                   <div className="login-buttons"><button onClick={submitReport} className="btn-confirm-login">Wyślij</button><button onClick={() => setShowReportModal(false)} className="btn-cancel-login">Anuluj</button></div>
@@ -222,24 +214,14 @@ function Details() {
                 <div className="info-row">
                     <span className="label">Kod Pocztowy:</span>
                     {isEditing ? (
-                        <div className="edit-box">
-                            <input value={newPostal} onChange={e=>setNewPostal(e.target.value)} />
-                            <button onClick={savePostalCode}>💾</button>
-                            <button onClick={()=>setIsEditing(false)} className="cancel">✖</button>
-                        </div>
+                        <div className="edit-box"><input value={newPostal} onChange={e=>setNewPostal(e.target.value)} /><button onClick={savePostalCode}>💾</button><button onClick={()=>setIsEditing(false)} className="cancel">✖</button></div>
                     ) : (
-                        <div className="value-box">
-                            <strong>{postalCode || 'Brak'}</strong>
-                            {(userRole==='operator'||userRole==='audytor') && <button onClick={startEditing} className="btn-edit-mini">✏️</button>}
-                        </div>
+                        <div className="value-box"><strong>{postalCode || 'Brak'}</strong>{(userRole==='operator'||userRole==='audytor') && <button onClick={startEditing} className="btn-edit-mini">✏️</button>}</div>
                     )}
                 </div>
-                
                 <div className="info-row" style={{marginTop:'15px', borderTop:'1px solid #eee', paddingTop:'15px'}}>
                     <span className="label">Wysokość:</span>
-                    <div className="value-box">
-                        {elevation ? <strong style={{color:'#2980b9'}}>{elevation} m n.p.m.</strong> : <span style={{color:'#999'}}>Brak danych</span>}
-                    </div>
+                    <div className="value-box">{elevation ? <strong style={{color:'#2980b9'}}>{elevation} m n.p.m.</strong> : <span style={{color:'#999'}}>Brak danych</span>}</div>
                 </div>
             </div>
 
@@ -247,14 +229,8 @@ function Details() {
                 <div className="coords-header">Współrzędne Geograficzne</div>
                 {coords ? (
                     <div className="coords-display">
-                        <div className="coord-item">
-                            <span className="coord-label">🌐 Szerokość (Lat)</span>
-                            <span className="coord-val">{lat}</span>
-                        </div>
-                        <div className="coord-item">
-                            <span className="coord-label">🧭 Długość (Lon)</span>
-                            <span className="coord-val">{lon}</span>
-                        </div>
+                        <div className="coord-item"><span className="coord-label">🌐 Szerokość (Lat)</span><span className="coord-val">{lat}</span></div>
+                        <div className="coord-item"><span className="coord-label">🧭 Długość (Lon)</span><span className="coord-val">{lon}</span></div>
                     </div>
                 ) : (
                     <div className="no-coords">Brak danych GPS<br/>Kliknij "Pobierz dane"</div>
@@ -265,58 +241,31 @@ function Details() {
         <div className="action-buttons">
             {coords ? (
             <>
-                {/* POPRAWIONY LINK: */}
-                <a href={`https://www.google.com/maps?q=${coords.replace(' ', '')}`} target="_blank" rel="noreferrer" className="btn-search">Mapa Google 🗺️</a>
+                <a href={`http://googleusercontent.com/maps.google.com/?q=${coords.replace(' ', '')}`} target="_blank" rel="noreferrer" className="btn-search">Mapa Google 🗺️</a>
                 <button onClick={handleAddToReport} className="btn-add-report">+ Dodaj do raportu</button>
                 <button onClick={handleDownloadSingle} className="btn-download">Pobierz CSV 📥</button>
             </>
             ) : (
-            <button className="btn-search" onClick={handleGeocode} disabled={processing}>
-                {processing ? 'Pobieranie...' : `📍 Pobierz pozycję i dane`}
-            </button>
+            <button className="btn-search" onClick={handleGeocode} disabled={processing}>{processing ? 'Pobieranie...' : `📍 Pobierz pozycję i dane`}</button>
             )}
         </div>
 
-        <div style={{marginTop:'30px'}}>
-            <button onClick={openReportModal} className="btn-report-error">📢 Zgłoś błąd tego adresu</button>
-        </div>
+        <div style={{marginTop:'30px'}}><button onClick={openReportModal} className="btn-report-error">📢 Zgłoś błąd tego adresu</button></div>
 
-        {/* --- SEKCJA NOTATEK --- */}
         <div className="notes-container" style={{marginTop: '40px', borderTop: '2px dashed #ddd', paddingTop: '20px'}}>
             <h3 style={{color: '#f39c12'}}>📝 Notatki Społeczności</h3>
-            
-            {notes.length === 0 ? (
-                <p style={{color: '#999', fontStyle: 'italic'}}>Brak notatek. Wiesz coś ciekawego? Dodaj!</p>
-            ) : (
-                <div className="notes-list">
-                    {notes.map(note => (
-                        <div key={note.id} className="note-card">
-                            <p className="note-content">"{note.tresc}"</p>
-                            <span className="note-meta">Dodano: {new Date(note.data_dodania).toLocaleDateString()}</span>
-                        </div>
-                    ))}
-                </div>
+            {notes.length === 0 ? <p style={{color: '#999', fontStyle: 'italic'}}>Brak notatek. Wiesz coś ciekawego? Dodaj!</p> : (
+                <div className="notes-list">{notes.map(note => (<div key={note.id} className="note-card"><p className="note-content">"{note.tresc}"</p><span className="note-meta">Dodano: {new Date(note.data_dodania).toLocaleDateString()}</span></div>))}</div>
             )}
-
             {!showNoteInput ? (
-                <button onClick={() => setShowNoteInput(true)} className="btn-suggest-note">
-                    ➕ Dodaj informację (np. kod domofonu, firma)
-                </button>
+                <button onClick={() => setShowNoteInput(true)} className="btn-suggest-note">➕ Dodaj informację (np. kod domofonu, firma)</button>
             ) : (
                 <div className="note-input-box">
-                    <textarea 
-                        placeholder="Np. Kod do klatki 1 to 1234, na parterze jest Żabka..."
-                        value={newNoteText}
-                        onChange={(e) => setNewNoteText(e.target.value)}
-                    />
-                    <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
-                        <button onClick={handleSuggestNote} className="btn-confirm-login" style={{fontSize: '0.9em'}}>Wyślij do zatwierdzenia</button>
-                        <button onClick={() => setShowNoteInput(false)} className="btn-cancel-login" style={{fontSize: '0.9em'}}>Anuluj</button>
-                    </div>
+                    <textarea placeholder="Np. Kod do klatki 1 to 1234..." value={newNoteText} onChange={(e) => setNewNoteText(e.target.value)} />
+                    <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}><button onClick={handleSuggestNote} className="btn-confirm-login" style={{fontSize: '0.9em'}}>Wyślij do zatwierdzenia</button><button onClick={() => setShowNoteInput(false)} className="btn-cancel-login" style={{fontSize: '0.9em'}}>Anuluj</button></div>
                 </div>
             )}
         </div>
-
       </div>
     </div>
   );
