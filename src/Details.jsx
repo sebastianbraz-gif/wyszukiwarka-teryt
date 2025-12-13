@@ -137,12 +137,14 @@ function Details() {
 
   const handleDownloadSingle = () => {
       if (!location || !coords) return;
-      const link = document.createElement('a'); link.href = `data:text/csv;charset=utf-8,\uFEFFAdres;${location.ulica} ${point}\nWspółrzędne;${coords}\nLink;http://googleusercontent.com/maps.google.com/?q=${coords.replace(' ', '')}`; link.download = 'dane.csv'; link.click();
+      // POPRAWIONY LINK:
+      const link = document.createElement('a'); link.href = `data:text/csv;charset=utf-8,\uFEFFAdres;${location.ulica} ${point}\nWspółrzędne;${coords}\nLink;https://www.google.com/maps?q=${coords.replace(' ', '')}`; link.download = 'dane.csv'; link.click();
   };
 
   const handleAddToReport = () => {
     const report = JSON.parse(localStorage.getItem('my_report') || '[]');
-    report.push({ id: `${id}-${point}`, ulica: location.ulica, numer: point, kod: postalCode, coords: coords, link: `http://googleusercontent.com/maps.google.com/?q=${coords.replace(' ', '')}`, data: new Date().toLocaleString() });
+    // POPRAWIONY LINK:
+    report.push({ id: `${id}-${point}`, ulica: location.ulica, numer: point, kod: postalCode, coords: coords, link: `https://www.google.com/maps?q=${coords.replace(' ', '')}`, data: new Date().toLocaleString() });
     localStorage.setItem('my_report', JSON.stringify(report)); alert("Dodano do raportu!");
   };
 
@@ -157,7 +159,7 @@ function Details() {
   // --- FUNKCJA ZGŁASZANIA NOTATKI ---
   const handleSuggestNote = async () => {
     if (!newNoteText.trim()) return;
-    const desc = `[NOTATKA] ${newNoteText}`; // Specjalny prefiks
+    const desc = `[NOTATKA] ${newNoteText}`;
     
     const { error } = await supabase.from('zgloszenia').insert([{ 
         lokalizacja_id: id, 
@@ -263,7 +265,8 @@ function Details() {
         <div className="action-buttons">
             {coords ? (
             <>
-                <a href={`http://googleusercontent.com/maps.google.com/?q=${coords.replace(' ', '')}`} target="_blank" rel="noreferrer" className="btn-search">Mapa Google 🗺️</a>
+                {/* POPRAWIONY LINK: */}
+                <a href={`https://www.google.com/maps?q=${coords.replace(' ', '')}`} target="_blank" rel="noreferrer" className="btn-search">Mapa Google 🗺️</a>
                 <button onClick={handleAddToReport} className="btn-add-report">+ Dodaj do raportu</button>
                 <button onClick={handleDownloadSingle} className="btn-download">Pobierz CSV 📥</button>
             </>
@@ -278,7 +281,7 @@ function Details() {
             <button onClick={openReportModal} className="btn-report-error">📢 Zgłoś błąd tego adresu</button>
         </div>
 
-        {/* --- SEKCJA NOTATEK (Tutaj dodano zmiany) --- */}
+        {/* --- SEKCJA NOTATEK --- */}
         <div className="notes-container" style={{marginTop: '40px', borderTop: '2px dashed #ddd', paddingTop: '20px'}}>
             <h3 style={{color: '#f39c12'}}>📝 Notatki Społeczności</h3>
             
