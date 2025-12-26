@@ -114,13 +114,10 @@ app.post('/api/update-teryt', async (req, res) => {
         // 4. LOAD: Przetwarzanie wsadowe (Batch Processing) w celu optymalizacji wydajności
         const BATCH_SIZE = 2000; // Definicja rozmiaru okna transakcyjnego
         let processedCount = 0;
-
         // Iteracja po zbiorze danych z krokiem wielkości paczki
         for (let i = 0; i < totalRecords; i += BATCH_SIZE) {
-            
             // Segmentacja danych (Memory Slicing)
             const batchRaw = rows.slice(i, i + BATCH_SIZE);
-
             // Mapowanie modelu XML na model relacyjny bazy danych
             const batchPrepared = batchRaw.map(row => {
                 const symUl = row.sym_ul;
@@ -131,7 +128,6 @@ app.post('/api/update-teryt', async (req, res) => {
 
                 // Generowanie unikalnego klucza złożonego (Composite Key)
                 const uniqueId = `${sym}-${symUl}`; 
-
                 return {
                     id_teryt: uniqueId,
                     sym_ul: symUl,
@@ -154,7 +150,6 @@ app.post('/api/update-teryt', async (req, res) => {
 
                 if (error) console.error(`❌ Błąd transakcji batch ${i}:`, error.message);
             }
-
             // Monitoring postępu procesu ETL
             processedCount += batchPrepared.length;
             if (processedCount % 10000 === 0) {
