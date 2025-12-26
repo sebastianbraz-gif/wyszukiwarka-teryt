@@ -47,12 +47,12 @@ function ReportPreview() {
 
     const dataToDownload = items.filter((_, index) => selectedIds.includes(index));
 
-    // Nagłówki z polskimi znakami
-    const headers = "Województwo;Miejscowość;Ulica;Numer;Kod;Wysokość;Współrzędne;Link;Data\n";
+    // ZMIANA: Dodano "Cechy" do nagłówka
+    const headers = "Województwo;Miejscowość;Ulica;Numer;Kod;Wysokość;Współrzędne;Link;Data;Cechy\n";
     
-    // Mapowanie danych - teraz uwzględnia nowe pola
+    // ZMIANA: Dodano item.cechy do wiersza
     const rows = dataToDownload.map(item => 
-      `${item.wojewodztwo || ''};${item.miejscowosc || ''};${item.ulica || ''};${item.numer || ''};${item.kod || ''};${item.wysokosc || ''};${item.coords || ''};${item.link || ''};${item.data || ''}`
+      `${item.wojewodztwo || ''};${item.miejscowosc || ''};${item.ulica || ''};${item.numer || ''};${item.kod || ''};${item.wysokosc || ''};${item.coords || ''};${item.link || ''};${item.data || ''};${item.cechy || ''}`
     ).join("\n");
 
     const blob = new Blob(["\uFEFF" + headers + rows], { type: 'text/csv;charset=utf-8;' });
@@ -121,7 +121,6 @@ function ReportPreview() {
                                     />
                                 </td>
                                 <td>
-                                    {/* Wyświetlamy Województwo i Miasto */}
                                     <span style={{fontSize:'0.8em', color:'#666'}}>{item.wojewodztwo}</span><br/>
                                     <strong>{item.miejscowosc}</strong>
                                 </td>

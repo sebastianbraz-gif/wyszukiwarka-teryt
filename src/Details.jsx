@@ -41,17 +41,15 @@ function Details() {
 
   // --- CECHY (DYNAMICZNE) ---
   const [assignedFeatures, setAssignedFeatures] = useState([]);
-  const [availableFeatures, setAvailableFeatures] = useState([]); // Słownik
+  const [availableFeatures, setAvailableFeatures] = useState([]); 
   const [showFeatureInput, setShowFeatureInput] = useState(false);
   const [selectedFeatureId, setSelectedFeatureId] = useState('');
   const [featureValue, setFeatureValue] = useState('');
-  const [editingFeatureId, setEditingFeatureId] = useState(null); // ID rekordu adresy_cechy
+  const [editingFeatureId, setEditingFeatureId] = useState(null);
 
-  // --- NOWA FUNKCJA: NAPRAWA LINKÓW GOOGLE MAPS ---
+  // --- NAPRAWA LINKÓW GOOGLE MAPS ---
   const getGoogleMapsLink = (query) => {
     if (!query) return '#';
-    // encodeURIComponent zamienia spacje na %20 i polskie znaki na kod bezpieczny dla URL
-    // Używamy uniwersalnego formatu Google Maps
     return `https://www.google.com/maps?q=${encodeURIComponent(query)}`;
   };
 
@@ -91,18 +89,13 @@ function Details() {
 
   }, [id, point, navigate]);
 
-  // 1b. Pobieranie Cech (gdy mamy już ID rekordu)
+  // 1b. Pobieranie Cech
   useEffect(() => {
     if (!currentRecordInfo.id) return;
     async function getFeatures() {
       const { data: myFeats } = await supabase
         .from('adresy_cechy')
-        .select(`
-                id,
-                wartosc,
-                cecha_id,
-                cechy_definicje ( id, nazwa )
-            `)
+        .select(`id, wartosc, cecha_id, cechy_definicje ( id, nazwa )`)
         .eq('adres_id', currentRecordInfo.id);
 
       const { data: allDefs } = await supabase.from('cechy_definicje').select('*');
@@ -117,7 +110,6 @@ function Details() {
   const handleAddFeature = async () => {
     if (!selectedFeatureId || !featureValue.trim()) return;
 
-    // Sprawdź czy już nie ma takiej cechy
     if (assignedFeatures.some(af => af.cecha_id === selectedFeatureId)) {
       alert("Ta cecha jest już przypisana do tego adresu!");
       return;
@@ -134,7 +126,6 @@ function Details() {
       alert("Dodano cechę!");
       setShowFeatureInput(false);
       setFeatureValue('');
-      // Odśwież (proste wymuszenie)
       const { data } = await supabase.from('adresy_cechy').select(`id, wartosc, cecha_id, cechy_definicje(id, nazwa)`).eq('adres_id', currentRecordInfo.id);
       setAssignedFeatures(data || []);
     }
@@ -144,7 +135,6 @@ function Details() {
     const { error } = await supabase.from('adresy_cechy').update({ wartosc: newValue }).eq('id', recordId);
     if (!error) {
       setEditingFeatureId(null);
-      // Odśwież lokalnie
       setAssignedFeatures(prev => prev.map(f => f.id === recordId ? { ...f, wartosc: newValue } : f));
     } else alert(error.message);
   };
@@ -215,21 +205,47 @@ function Details() {
     }
   };
 
-  // --- POPRAWIONE POBIERANIE CSV ---
+  // --- POPRAWIONE POBIERANIE CSV (SINGLE - Z CECHAMI) ---
   const handleDownloadSingle = () => {
     if (!location || !coords) return;
-    // Używamy nowej funkcji do generowania bezpiecznego linku
     const safeLink = getGoogleMapsLink(coords);
+    
+    // Budujemy treść pliku wiersz po wierszu
+    let csvContent = `Adres;${location.ulica} ${point}\n`;
+    csvContent += `Miejscowość;${location.miejscowosc}\n`;
+    csvContent += `Województwo;${location.wojewodztwo}\n`;
+    csvContent += `Kod Pocztowy;${postalCode || 'Brak'}\n`;
+    csvContent += `Współrzędne;${coords}\n`;
+    csvContent += `Wysokość;${elevation ? elevation + ' m' : '-'}\n`;
+    csvContent += `Link do Mapy;${safeLink}\n`;
+    csvContent += `Data pobrania;${new Date().toLocaleString()}\n`;
 
+    // Dodajemy cechy dodatkowe (jeśli istnieją)
+    if (assignedFeatures.length > 0) {
+        csvContent += `\n--- CECHY DODATKOWE ---\n`;
+        // Pętla po cechach: Nazwa Cechy; Wartość
+        assignedFeatures.forEach(f => {
+            csvContent += `${f.cechy_definicje?.nazwa};${f.wartosc}\n`;
+        });
+    }
+
+    // Tworzymy Blob z kodowaniem UTF-8 (BOM \uFEFF)
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    link.href = `data:text/csv;charset=utf-8,\uFEFFAdres;${location.ulica} ${point}\nWspółrzędne;${coords}\nLink;${safeLink}`;
-    link.download = 'dane.csv';
+    link.href = URL.createObjectURL(blob);
+    link.download = `Lokalizacja_${location.miejscowosc}_${point}.csv`; // Ładna nazwa pliku
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
   };
 
-  // --- POPRAWIONE DODAWANIE DO RAPORTU ---
+  // --- DODAWANIE DO RAPORTU (BULK) ---
   const handleAddToReport = () => {
     const report = JSON.parse(localStorage.getItem('my_report') || '[]');
+    
+    const featuresString = assignedFeatures.length > 0 
+        ? assignedFeatures.map(f => `${f.cechy_definicje?.nazwa}: ${f.wartosc}`).join(' | ')
+        : '-';
 
     const newItem = {
       id: `${id}-${point}`,
@@ -240,14 +256,14 @@ function Details() {
       kod: postalCode,
       wysokosc: elevation ? `${elevation} m` : '-',
       coords: coords,
-      // Używamy nowej funkcji do linku
       link: getGoogleMapsLink(coords),
-      data: new Date().toLocaleString()
+      data: new Date().toLocaleString(),
+      cechy: featuresString
     };
 
     report.push(newItem);
     localStorage.setItem('my_report', JSON.stringify(report));
-    alert("Dodano do raportu (z poprawnym linkiem)!");
+    alert("Dodano do raportu (razem z cechami)!");
   };
 
   const openReportModal = () => { setReportType('kod'); setReportNote(''); setShowReportModal(true); };
@@ -299,7 +315,10 @@ function Details() {
       <div className="table-container">
         <Link to={`/select/${id}`} style={{ color: 'black', display: 'block', marginBottom: '20px' }}>🠔 Wróć do wyboru</Link>
 
+        {/* --- UKŁAD SIATKI: LEWA STRONA (Info + Współrzędne) | PRAWA STRONA (Cechy) --- */}
         <div className="data-grid">
+          
+          {/* KOLUMNA LEWA: KOD, WYSOKOŚĆ + WSPÓŁRZĘDNE */}
           <div className="data-card info-section">
             <div className="info-row">
               <span className="label">Kod Pocztowy:</span>
@@ -309,14 +328,29 @@ function Details() {
                 <div className="value-box"><strong>{postalCode || 'Brak'}</strong>{(userRole === 'operator' || userRole === 'audytor') && <button onClick={startEditing} className="btn-edit-mini">✏️</button>}</div>
               )}
             </div>
+            
             <div className="info-row" style={{ marginTop: '15px', borderTop: '1px solid #eee', paddingTop: '15px' }}>
               <span className="label">Wysokość:</span>
               <div className="value-box">{elevation ? <strong style={{ color: '#2980b9' }}>{elevation} m n.p.m.</strong> : <span style={{ color: '#999' }}>Brak danych</span>}</div>
             </div>
 
-            {/* --- SEKCJA CECH DYNAMICZNYCH --- */}
             <div style={{ marginTop: '20px', borderTop: '2px solid #eee', paddingTop: '15px' }}>
-              <h4 style={{ margin: '0 0 10px 0', color: '#16a085' }}>📋 Cechy Dodatkowe</h4>
+                <div className="coords-header">Współrzędne Geograficzne</div>
+                {coords ? (
+                    <div className="coords-display">
+                        <div className="coord-item"><span className="coord-label">🌐 Szerokość (Lat)</span><span className="coord-val">{lat}</span></div>
+                        <div className="coord-item"><span className="coord-label">🧭 Długość (Lon)</span><span className="coord-val">{lon}</span></div>
+                    </div>
+                ) : (
+                    <div className="no-coords">Brak danych GPS<br />Kliknij "Pobierz dane"</div>
+                )}
+            </div>
+          </div>
+
+          {/* KOLUMNA PRAWA: CECHY DYNAMICZNE */}
+          <div className="data-card coords-section">
+            <div>
+              <h4 style={{ margin: '0 0 15px 0', color: '#16a085', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>📋 Cechy Dodatkowe</h4>
 
               {assignedFeatures.length === 0 && <p style={{ fontSize: '0.85em', color: '#999' }}>Brak przypisanych cech.</p>}
 
@@ -348,7 +382,7 @@ function Details() {
 
               {(userRole === 'operator' || userRole === 'audytor') && (
                 !showFeatureInput ? (
-                  <button onClick={() => setShowFeatureInput(true)} style={{ fontSize: '0.8em', marginTop: '10px', background: '#eafaf1', border: '1px solid #2ecc71', color: '#27ae60', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' }}>+ Dodaj cechę</button>
+                  <button onClick={() => setShowFeatureInput(true)} style={{ fontSize: '0.8em', marginTop: '10px', background: '#eafaf1', border: '1px solid #2ecc71', color: '#27ae60', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', width: '100%' }}>+ Dodaj cechę</button>
                 ) : (
                   <div style={{ marginTop: '10px', background: '#fff', border: '1px solid #ccc', padding: '10px', borderRadius: '4px' }}>
                     <select
@@ -373,26 +407,12 @@ function Details() {
                 )
               )}
             </div>
-
-          </div>
-
-          <div className="data-card coords-section">
-            <div className="coords-header">Współrzędne Geograficzne</div>
-            {coords ? (
-              <div className="coords-display">
-                <div className="coord-item"><span className="coord-label">🌐 Szerokość (Lat)</span><span className="coord-val">{lat}</span></div>
-                <div className="coord-item"><span className="coord-label">🧭 Długość (Lon)</span><span className="coord-val">{lon}</span></div>
-              </div>
-            ) : (
-              <div className="no-coords">Brak danych GPS<br />Kliknij "Pobierz dane"</div>
-            )}
           </div>
         </div>
 
         <div className="action-buttons">
           {coords ? (
             <>
-              {/* TUTAJ JEST UŻYCIE FUNKCJI NAPRAWIAJĄCEJ LINK */}
               <a
                 href={getGoogleMapsLink(coords)}
                 target="_blank"

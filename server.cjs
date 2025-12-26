@@ -50,9 +50,9 @@ app.post('/api/update-teryt', async (req, res) => {
             rola: 'system', akcja: 'start_aktualizacji', opis_szczegolowy: 'Szukanie lokalnego pliku ZIP...'
         }]);
 
-        // 1. Znajdź plik ZIP w katalogu bieżącym (__dirname)
+        // 1. Znajduje plik ZIP w katalogu bieżącym 
         const files = fs.readdirSync(__dirname);
-        // Szukamy pliku, który kończy się na .zip i (opcjonalnie) ma w nazwie ULIC
+        // Szukam pliku, który kończy się na .zip i 
         // Jeśli plik nazywa się inaczej, np. "dane.zip", zmień 'ULIC' na co innego lub usuń ten warunek.
         const terytFileName = files.find(file => file.match(/\.zip$/i) && file.match(/ULIC/i));
 
@@ -63,7 +63,7 @@ app.post('/api/update-teryt', async (req, res) => {
         const filePath = path.join(__dirname, terytFileName);
         console.log(`📦 Znaleziono plik: ${terytFileName}`);
 
-        // 2. Rozpakuj z dysku
+        // 2. Rozpakowywuje z dysku
         const zip = new AdmZip(filePath);
         const zipEntries = zip.getEntries();
         let xmlData = null;
